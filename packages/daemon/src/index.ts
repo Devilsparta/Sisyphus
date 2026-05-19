@@ -1,14 +1,77 @@
 /**
- * sisyphus-daemon — entry point.
+ * sisyphus-daemon — minimal HTTP server (early M1 cut).
  *
- * M0: stub only. HTTP+WS server, registry implementation, and plugin loader
- * land in M1. This file exists so the workspace links and typechecks.
+ * For now exposes only POST /api/chat (migrated from the Next.js API route
+ * during the UI's Next.js → Vite swap). Plugin loader, registry implementation,
+ * and WebSocket land in proper M1.
  */
-import type { SisyphusPlugin } from '@sisyphus/kernel';
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import 'dotenv/config';
+import OpenAI from 'openai';
 
-const loaded: SisyphusPlugin[] = [];
+const PORT = Number(process.env.SISYPHUS_DAEMON_PORT ?? 8787);
 
-// eslint-disable-next-line no-console
-console.log('[sisyphus-daemon] M0 stub — server arrives in M1');
-// eslint-disable-next-line no-console
-console.log(`[sisyphus-daemon] plugins loaded: ${loaded.length}`);
+const client = new OpenAI({
+  baseURL: process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
+  apiKey: process.env.OPENAI_API_KEY ?? '',
+});
+
+const model = process.env.OPENAI_MODEL ?? 'gpt-4o';
+
+const SYSTEM_PROMPT =
+  'You are a helpful coding assistant. When the user asks you to build something, respond with a single React component in a ```jsx code block. The code should be a complete, self-contained React component using export default. You can use inline styles. Do not use external imports besides React.';
+
+interface ChatRequest {
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+}
+
+const app = new Hono();
+
+app.use('*', cors());
+
+app.get('/health', (c) => c.json({ ok: true, name: 'sisyphus-daemon' }));
+
+app.post('/api/chat', async (c) => {
+  const { messages } = await c.req.json<ChatRequest>();
+
+  const completionStream = await client.chat.completions.create({
+    model,
+    messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+    stream: true,
+  });
+
+  const encoder = new TextEncoder();
+  const readable = new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const chunk of completionStream) {
+          const content = chunk.choices[0]?.delta?.content;
+          if (content) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ content })}\n\n`),
+            );
+          }
+        }
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+  });
+
+  return new Response(readable, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    },
+  });
+});
+
+serve({ fetch: app.fetch, port: PORT }, (info) => {
+  // eslint-disable-next-line no-console
+  console.log(`[sisyphus-daemon] listening on http://localhost:${info.port}`);
+});

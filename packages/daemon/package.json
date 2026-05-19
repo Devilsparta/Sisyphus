@@ -2,7 +2,7 @@
   "name": "@sisyphus/daemon",
   "version": "0.1.0",
   "private": true,
-  "description": "Sisyphus daemon — Node process hosting plugins and serving HTTP+WS API (M1+).",
+  "description": "Sisyphus daemon — Node process hosting plugins and serving HTTP+WS API.",
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
@@ -11,7 +11,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@sisyphus/kernel": "workspace:*"
+    "@hono/node-server": "^1.13.0",
+    "@sisyphus/kernel": "workspace:*",
+    "dotenv": "^16.4.5",
+    "hono": "^4.6.0",
+    "openai": "^6.33.0"
   },
   "devDependencies": {
     "@types/node": "^20",

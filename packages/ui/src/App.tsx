@@ -1,11 +1,9 @@
-"use client";
+import { useState } from 'react';
+import ChatPanel from './components/chat-panel';
+import PreviewPanel from './components/preview-panel';
 
-import { useState } from "react";
-import ChatPanel from "@/components/chat-panel";
-import PreviewPanel from "@/components/preview-panel";
-
-export default function Home() {
-  const [code, setCode] = useState("");
+export default function App() {
+  const [code, setCode] = useState('');
 
   return (
     <div className="flex h-screen">
