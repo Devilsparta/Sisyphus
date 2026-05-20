@@ -16,8 +16,13 @@ import type { Server as HTTPServer } from 'node:http';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import 'dotenv/config';
+import { config as loadDotenv } from 'dotenv';
 import OpenAI from 'openai';
+
+// Load both .env and .env.local; the latter overrides and is the convention
+// for unchecked-in secrets (used here for OPENAI_API_KEY etc).
+loadDotenv();
+loadDotenv({ path: '.env.local', override: true });
 import {
   KernelEvents,
   type Region,
@@ -88,7 +93,16 @@ api.post('/chat', async (c) => {
     async start(controller) {
       try {
         for await (const chunk of completionStream) {
-          const content = chunk.choices[0]?.delta?.content;
+          // Some providers (e.g. Kimi-K2.5 via Volcengine) stream the model's
+          // reasoning trace in `delta.reasoning_content` separately from the
+          // final answer in `delta.content`. M1 collapses both into one stream;
+          // M2 will split them so the UI can hide reasoning if it wants.
+          const delta = chunk.choices[0]?.delta as
+            | { content?: string; reasoning_content?: string }
+            | undefined;
+          // Use `||` (not `??`) — content is often "" during the reasoning
+          // phase and we want to fall through to reasoning_content then.
+          const content = delta?.content || delta?.reasoning_content;
           if (content) {
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ content })}\n\n`),
