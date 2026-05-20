@@ -15,10 +15,12 @@
     "@sisyphus/kernel": "workspace:*",
     "dotenv": "^16.4.5",
     "hono": "^4.6.0",
-    "openai": "^6.33.0"
+    "openai": "^6.33.0",
+    "ws": "^8.20.1"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.19.0",
     "typescript": "^5"
   }

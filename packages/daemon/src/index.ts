@@ -1,5 +1,5 @@
 /**
- * sisyphus-daemon — HTTP server (M1 cut).
+ * sisyphus-daemon — HTTP + WebSocket server (M1 cut).
  *
  * Endpoints:
  *   GET  /health                  — liveness probe
@@ -7,19 +7,24 @@
  *   GET  /api/registry/views      — list registered views (optional ?region=)
  *   GET  /api/registry/cards      — list registered card types
  *   GET  /api/registry/skills     — list registered skills
+ *   WS   /ws                      — IPC channel (events + RPC frames)
  *
- * Plugin loader and WebSocket land later in M1 (WS frame format is still
- * pending a user decision; see wiki待拍决策 #1).
- *
- * The system prompt is still hardcoded here (M2 moves it into plugin-base).
+ * Plugin loader lands later in M1.5 / M2; for now the registry is empty and
+ * the system prompt is still hardcoded here.
  */
+import type { Server as HTTPServer } from 'node:http';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import 'dotenv/config';
 import OpenAI from 'openai';
-import type { Region } from '@sisyphus/kernel';
+import {
+  KernelEvents,
+  type Region,
+} from '@sisyphus/kernel';
 import { Registry } from './registry';
+import { createWSHub } from './ws';
+import { bus } from './event-bus';
 
 const PORT = Number(process.env.SISYPHUS_DAEMON_PORT ?? 8787);
 
@@ -38,6 +43,28 @@ interface ChatRequest {
 }
 
 export const registry = new Registry();
+const startedAt = Date.now();
+
+const wsHub = createWSHub({
+  // Greet every new connection with current platform state, so late joiners
+  // see the same picture boot-time clients would have.
+  onConnection(send) {
+    send(KernelEvents.PlatformReady, { startedAt });
+    send(KernelEvents.RegistrySnapshot, registry.snapshot());
+  },
+});
+
+// Forward registry mutations from the in-process bus out to WS clients.
+for (const event of [
+  KernelEvents.RegistryViewAdded,
+  KernelEvents.RegistryViewRemoved,
+  KernelEvents.RegistryCardAdded,
+  KernelEvents.RegistryCardRemoved,
+  KernelEvents.RegistrySkillAdded,
+  KernelEvents.RegistrySkillRemoved,
+]) {
+  bus.on(event, (data) => wsHub.broadcast(event, data));
+}
 
 const app = new Hono();
 
@@ -96,7 +123,12 @@ api.get('/registry/skills', (c) => c.json(registry.querySkills()));
 
 app.route('/api', api);
 
-serve({ fetch: app.fetch, port: PORT }, (info) => {
+const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
   // eslint-disable-next-line no-console
   console.log(`[sisyphus-daemon] listening on http://localhost:${info.port}`);
 });
+
+// @hono/node-server's `serve()` returns a ServerType union (HTTP / HTTP/2)
+// but the default factory uses http.createServer(), so the runtime instance
+// is always an http.Server. Cast to narrow for ws-hub attachment.
+wsHub.attach(server as unknown as HTTPServer);

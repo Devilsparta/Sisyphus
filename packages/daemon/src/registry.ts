@@ -4,22 +4,28 @@
  * through this object during activation; the HTTP API exposes read access
  * to the UI (and to other plugins, indirectly).
  *
+ * Mutations publish on the internal event bus so the WS hub can rebroadcast
+ * registry deltas to connected UI clients.
+ *
  * Service-discovery discipline (project charter):
  * - No implicit lookup. Everything must be explicitly declared and
  *   registered through this object.
  * - Ids must be namespace-prefixed (enforced lightly here: collision check
  *   only; the prefix convention is documented in the kernel contract).
- * - dispose() must fully revoke the registration.
+ * - dispose() must fully revoke the registration AND emit a removal event.
  */
-import type {
-  CardDescriptor,
-  Disposable,
-  Region,
-  RegistryAPI,
-  SkillDescriptor,
-  SkillHandler,
-  ViewDescriptor,
+import {
+  KernelEvents,
+  type CardDescriptor,
+  type Disposable,
+  type Region,
+  type RegistryAPI,
+  type SkillDescriptor,
+  type SkillHandler,
+  type ViewDescriptor,
+  type RegistrySnapshot,
 } from '@sisyphus/kernel';
+import { bus } from './event-bus';
 
 interface SkillEntry {
   descriptor: SkillDescriptor;
@@ -36,9 +42,12 @@ export class Registry implements RegistryAPI {
       throw new Error(`View id collision: ${view.id}`);
     }
     this.views.set(view.id, view);
+    bus.emit(KernelEvents.RegistryViewAdded, view);
     return {
       dispose: () => {
-        this.views.delete(view.id);
+        if (this.views.delete(view.id)) {
+          bus.emit(KernelEvents.RegistryViewRemoved, { id: view.id });
+        }
       },
     };
   }
@@ -48,9 +57,12 @@ export class Registry implements RegistryAPI {
       throw new Error(`Card type collision: ${card.type}`);
     }
     this.cards.set(card.type, card);
+    bus.emit(KernelEvents.RegistryCardAdded, card);
     return {
       dispose: () => {
-        this.cards.delete(card.type);
+        if (this.cards.delete(card.type)) {
+          bus.emit(KernelEvents.RegistryCardRemoved, { type: card.type });
+        }
       },
     };
   }
@@ -60,9 +72,12 @@ export class Registry implements RegistryAPI {
       throw new Error(`Skill id collision: ${skill.id}`);
     }
     this.skills.set(skill.id, { descriptor: skill, handler });
+    bus.emit(KernelEvents.RegistrySkillAdded, skill);
     return {
       dispose: () => {
-        this.skills.delete(skill.id);
+        if (this.skills.delete(skill.id)) {
+          bus.emit(KernelEvents.RegistrySkillRemoved, { id: skill.id });
+        }
       },
     };
   }
@@ -80,6 +95,14 @@ export class Registry implements RegistryAPI {
 
   querySkills(): SkillDescriptor[] {
     return Array.from(this.skills.values()).map((s) => s.descriptor);
+  }
+
+  snapshot(): RegistrySnapshot {
+    return {
+      views: this.queryViews(),
+      cards: this.queryCards(),
+      skills: this.querySkills(),
+    };
   }
 
   /**

@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
 const DAEMON_URL = process.env.SISYPHUS_DAEMON_URL ?? 'http://localhost:8787';
+const DAEMON_WS_URL = DAEMON_URL.replace(/^http/, 'ws');
 
 export default defineConfig({
   plugins: [react()],
@@ -16,6 +17,11 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: DAEMON_URL,
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: DAEMON_WS_URL,
+        ws: true,
         changeOrigin: true,
       },
     },

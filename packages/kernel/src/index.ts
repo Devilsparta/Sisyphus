@@ -141,21 +141,51 @@ export interface Disposable {
   dispose(): void;
 }
 
-// ─── IPC envelopes (HTTP + WebSocket; protocol detail lands in M1) ──────────
+// ─── IPC envelopes (HTTP + WebSocket) ───────────────────────────────────────
+//
+// Wire format decision (2026-05-20): custom protocol with three frame kinds
+// distinguished by a `type` discriminator. See wiki — chosen over JSON-RPC 2.0
+// for clearer separation between request/response (RPC) and event (pubsub).
 
 export interface IPCRequest<T = unknown> {
+  type: 'request';
   id: string;
   method: string;
   params?: T;
 }
 
 export interface IPCResponse<T = unknown> {
+  type: 'response';
   id: string;
   result?: T;
   error?: { code: number; message: string; data?: unknown };
 }
 
 export interface IPCEvent<T = unknown> {
+  type: 'event';
   event: string;
   data: T;
+}
+
+export type IPCMessage = IPCRequest | IPCResponse | IPCEvent;
+
+// Well-known kernel event names. Plugins must use their own namespace-prefixed
+// event names (e.g. "plugin-base.chat.token") to avoid collisions.
+export const KernelEvents = {
+  PlatformReady: 'platform.ready',
+  RegistrySnapshot: 'registry.snapshot',
+  RegistryViewAdded: 'registry.view.added',
+  RegistryViewRemoved: 'registry.view.removed',
+  RegistryCardAdded: 'registry.card.added',
+  RegistryCardRemoved: 'registry.card.removed',
+  RegistrySkillAdded: 'registry.skill.added',
+  RegistrySkillRemoved: 'registry.skill.removed',
+} as const;
+
+export type KernelEventName = (typeof KernelEvents)[keyof typeof KernelEvents];
+
+export interface RegistrySnapshot {
+  views: ViewDescriptor[];
+  cards: CardDescriptor[];
+  skills: SkillDescriptor[];
 }
