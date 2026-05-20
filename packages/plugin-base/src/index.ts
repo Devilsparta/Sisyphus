@@ -12,6 +12,7 @@
 import type { SisyphusPlugin } from '@sisyphus/kernel';
 import { reactDesignerAgent } from './agents/react-designer';
 import { timeHelperAgent } from './agents/time-helper';
+import { assistantAgent } from './agents/assistant';
 import { currentTimeSkill, currentTimeHandler } from './skills/current-time';
 
 const plugin: SisyphusPlugin = {
@@ -21,13 +22,17 @@ const plugin: SisyphusPlugin = {
     version: '0.1.0',
     dependencies: [],
     contributes: {
-      agents: [reactDesignerAgent.descriptor, timeHelperAgent.descriptor],
+      agents: [
+        reactDesignerAgent.descriptor,
+        timeHelperAgent.descriptor,
+        assistantAgent.descriptor,
+      ],
       views: [],
       cards: [],
       skills: [currentTimeSkill],
     },
   },
-  agents: [reactDesignerAgent, timeHelperAgent],
+  agents: [reactDesignerAgent, timeHelperAgent, assistantAgent],
   skillHandlers: {
     [currentTimeSkill.id]: currentTimeHandler,
   },

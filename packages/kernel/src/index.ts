@@ -137,6 +137,16 @@ export interface AgentRunContext {
    * may choose to call a skill silently).
    */
   invokeSkill: (id: string, args: Record<string, unknown>) => Promise<unknown>;
+  /**
+   * Snapshot of every skill currently registered with the daemon. Agents
+   * use this to build the `tools` array for an LLM tool-calling call:
+   * each skill's `schema` is already OpenAI tools format.
+   *
+   * Note: OpenAI's function name pattern disallows '.', so skill.schema
+   * .function.name will not be the namespaced skill.id — the agent must
+   * keep its own name→id map when dispatching the LLM's tool_calls.
+   */
+  querySkills: () => SkillDescriptor[];
 }
 
 /**
