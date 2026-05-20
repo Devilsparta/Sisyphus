@@ -1,18 +1,34 @@
-import { useState } from 'react';
+import { PanelLayout, registerView, WorkspaceProvider } from './layout';
 import ChatPanel from './components/chat-panel';
 import PreviewPanel from './components/preview-panel';
 
-export default function App() {
-  const [code, setCode] = useState('');
+// M1 built-in views. M2 will move these registrations into @sisyphus/plugin-base.
+registerView(
+  {
+    id: 'kernel.view.chat',
+    region: 'side',
+    title: 'Chat',
+    icon: 'message-square',
+    defaultVisible: true,
+  },
+  ChatPanel,
+);
 
+registerView(
+  {
+    id: 'kernel.view.canvas-preview',
+    region: 'main',
+    title: 'Preview',
+    icon: 'eye',
+    defaultVisible: true,
+  },
+  PreviewPanel,
+);
+
+export default function App() {
   return (
-    <div className="flex h-screen">
-      <div className="w-[400px] min-w-[400px] border-r border-border">
-        <ChatPanel onCodeUpdate={setCode} />
-      </div>
-      <div className="flex-1">
-        <PreviewPanel code={code} />
-      </div>
-    </div>
+    <WorkspaceProvider>
+      <PanelLayout />
+    </WorkspaceProvider>
   );
 }

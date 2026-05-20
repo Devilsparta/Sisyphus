@@ -4,10 +4,7 @@ import {
   SandpackPreview,
   SandpackCodeEditor,
 } from "@codesandbox/sandpack-react";
-
-interface PreviewPanelProps {
-  code: string;
-}
+import { useWorkspace } from "@/layout/workspace-state";
 
 const DEFAULT_CODE = `export default function App() {
   return (
@@ -25,7 +22,8 @@ const DEFAULT_CODE = `export default function App() {
   );
 }`;
 
-export default function PreviewPanel({ code }: PreviewPanelProps) {
+export default function PreviewPanel() {
+  const { generatedCode: code } = useWorkspace();
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-border px-4 py-3">

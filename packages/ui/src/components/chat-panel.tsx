@@ -2,14 +2,11 @@ import { useState, useRef, useEffect, useCallback, FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useWorkspace } from "@/layout/workspace-state";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
-}
-
-interface ChatPanelProps {
-  onCodeUpdate: (code: string) => void;
 }
 
 function extractCodeBlock(text: string): string | null {
@@ -17,7 +14,8 @@ function extractCodeBlock(text: string): string | null {
   return match ? match[1].trim() : null;
 }
 
-export default function ChatPanel({ onCodeUpdate }: ChatPanelProps) {
+export default function ChatPanel() {
+  const { setGeneratedCode } = useWorkspace();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -89,7 +87,7 @@ export default function ChatPanel({ onCodeUpdate }: ChatPanelProps) {
 
               const code = extractCodeBlock(assistantContent);
               if (code) {
-                onCodeUpdate(code);
+                setGeneratedCode(code);
               }
             } catch {
               // skip malformed chunks

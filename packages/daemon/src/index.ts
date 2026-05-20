@@ -1,15 +1,25 @@
 /**
- * sisyphus-daemon — minimal HTTP server (early M1 cut).
+ * sisyphus-daemon — HTTP server (M1 cut).
  *
- * For now exposes only POST /api/chat (migrated from the Next.js API route
- * during the UI's Next.js → Vite swap). Plugin loader, registry implementation,
- * and WebSocket land in proper M1.
+ * Endpoints:
+ *   GET  /health                  — liveness probe
+ *   POST /api/chat                — LLM streaming (SSE)
+ *   GET  /api/registry/views      — list registered views (optional ?region=)
+ *   GET  /api/registry/cards      — list registered card types
+ *   GET  /api/registry/skills     — list registered skills
+ *
+ * Plugin loader and WebSocket land later in M1 (WS frame format is still
+ * pending a user decision; see wiki待拍决策 #1).
+ *
+ * The system prompt is still hardcoded here (M2 moves it into plugin-base).
  */
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import 'dotenv/config';
 import OpenAI from 'openai';
+import type { Region } from '@sisyphus/kernel';
+import { Registry } from './registry';
 
 const PORT = Number(process.env.SISYPHUS_DAEMON_PORT ?? 8787);
 
@@ -27,13 +37,17 @@ interface ChatRequest {
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
 }
 
+export const registry = new Registry();
+
 const app = new Hono();
 
 app.use('*', cors());
 
 app.get('/health', (c) => c.json({ ok: true, name: 'sisyphus-daemon' }));
 
-app.post('/api/chat', async (c) => {
+const api = new Hono();
+
+api.post('/chat', async (c) => {
   const { messages } = await c.req.json<ChatRequest>();
 
   const completionStream = await client.chat.completions.create({
@@ -70,6 +84,17 @@ app.post('/api/chat', async (c) => {
     },
   });
 });
+
+api.get('/registry/views', (c) => {
+  const region = c.req.query('region') as Region | undefined;
+  return c.json(registry.queryViews(region ? { region } : undefined));
+});
+
+api.get('/registry/cards', (c) => c.json(registry.queryCards()));
+
+api.get('/registry/skills', (c) => c.json(registry.querySkills()));
+
+app.route('/api', api);
 
 serve({ fetch: app.fetch, port: PORT }, (info) => {
   // eslint-disable-next-line no-console
