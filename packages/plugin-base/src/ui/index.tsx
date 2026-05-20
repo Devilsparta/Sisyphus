@@ -11,6 +11,8 @@ import ChatPanel from './views/chat-panel';
 import CanvasPreview from './views/canvas-preview';
 import { WorkspaceProvider } from './workspace-state';
 
+type Provider = ComponentType<{ children: ReactNode }>;
+
 export interface UIViewRegistration {
   descriptor: ViewDescriptor;
   Component: ComponentType;
@@ -47,11 +49,8 @@ export const views: UIViewRegistration[] = [
 export const cardRenderers: UICardRegistration[] = [];
 
 /**
- * Root provider this plugin needs wrapped around the layout shell so its
- * views can share state. M3+ will replace this with a plugin-agnostic
- * provider-stack mechanism in the kernel UI; for now the host knows it
- * needs to render this one plugin's provider explicitly.
+ * Providers this plugin needs wrapped around the host's layout shell. The
+ * UI host iterates this array and registers each through kernel/ui's
+ * registerProvider; <ProviderStack> nests them all uniformly.
  */
-export function PluginBaseProvider({ children }: { children: ReactNode }) {
-  return <WorkspaceProvider>{children}</WorkspaceProvider>;
-}
+export const providers: Provider[] = [WorkspaceProvider];

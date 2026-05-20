@@ -7,6 +7,8 @@ import TaskListCard from './cards/task-list-card';
 import TodoListView from './views/todo-list-view';
 import { TodoProvider } from './todo-state';
 
+type Provider = ComponentType<{ children: ReactNode }>;
+
 export interface UIViewRegistration {
   descriptor: ViewDescriptor;
   Component: ComponentType;
@@ -37,6 +39,4 @@ export const cardRenderers: UICardRegistration[] = [
   },
 ];
 
-export function PluginTodoProvider({ children }: { children: ReactNode }) {
-  return <TodoProvider>{children}</TodoProvider>;
-}
+export const providers: Provider[] = [TodoProvider];

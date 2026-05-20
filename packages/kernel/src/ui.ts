@@ -9,7 +9,7 @@
  * React is `import type`-only — TypeScript strips it from emit, so the
  * daemon's `@sisyphus/kernel` entry stays React-runtime-free.
  */
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { Region, ViewDescriptor } from './index';
 
 // ─── View registry ─────────────────────────────────────────────────────────
@@ -68,4 +68,26 @@ export function getCardRenderer(
   type: string,
 ): CardRendererComponent | undefined {
   return cardRenderers.get(type);
+}
+
+// ─── Provider registry ─────────────────────────────────────────────────────
+//
+// Plugins that need to wrap the host with a React context provider register
+// it here. The host renders a <ProviderStack> that nests them around the
+// layout shell. Order: registration order, outermost first.
+
+export type ProviderComponent = ComponentType<{ children: ReactNode }>;
+
+const providers: ProviderComponent[] = [];
+
+export function registerProvider(Component: ProviderComponent): () => void {
+  providers.push(Component);
+  return () => {
+    const idx = providers.indexOf(Component);
+    if (idx !== -1) providers.splice(idx, 1);
+  };
+}
+
+export function getProviders(): ProviderComponent[] {
+  return [...providers];
 }

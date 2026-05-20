@@ -179,11 +179,29 @@ export interface SisyphusPlugin {
 
 export interface PluginContext {
   registry: RegistryAPI;
+  storage: PluginStorage;
   log: (
     level: 'debug' | 'info' | 'warn' | 'error',
     msg: string,
     meta?: unknown,
   ) => void;
+}
+
+/**
+ * Per-plugin persistent key-value storage. Daemon provides a sandboxed
+ * instance to each plugin (keyed by manifest id) so plugin state survives
+ * restarts. Values must be JSON-serializable.
+ *
+ * Concurrency model: writes are debounced and best-effort durable; callers
+ * needn't await `set`/`delete` for correctness during the run, but the
+ * daemon flushes pending writes on shutdown.
+ */
+export interface PluginStorage {
+  get<T = unknown>(key: string): Promise<T | undefined>;
+  set(key: string, value: unknown): Promise<void>;
+  delete(key: string): Promise<void>;
+  clear(): Promise<void>;
+  keys(): Promise<string[]>;
 }
 
 export interface ChatMessage {

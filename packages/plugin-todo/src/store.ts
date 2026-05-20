@@ -1,11 +1,14 @@
 /**
- * Plugin-local in-memory todo store. Lives in the daemon process; the agent
- * mutates it, and the UI mirrors state via `task-list` cards.
+ * Plugin-local todo store with optional persistence.
  *
- * Stateless restart: the daemon is the source of truth at runtime; persistence
- * is out of scope for M3 (would land alongside a real KV store in M4+).
+ * Lifecycle:
+ *  - Module-level singleton, populated synchronously in agent.run paths.
+ *  - `init(storage)` is called from the plugin's onActivate, replacing the
+ *    in-memory list with the persisted snapshot if any.
+ *  - Mutations write to disk fire-and-forget; the daemon flushes on shutdown.
  */
 import { randomUUID } from 'node:crypto';
+import type { PluginStorage } from '@sisyphus/kernel';
 
 export interface Task {
   id: string;
@@ -14,8 +17,19 @@ export interface Task {
   createdAt: number;
 }
 
+const STORAGE_KEY = 'tasks';
+
 class TodoStore {
   private tasks: Task[] = [];
+  private storage: PluginStorage | null = null;
+
+  async init(storage: PluginStorage): Promise<void> {
+    this.storage = storage;
+    const loaded = await storage.get<Task[]>(STORAGE_KEY);
+    if (Array.isArray(loaded)) {
+      this.tasks = loaded;
+    }
+  }
 
   add(text: string): Task {
     const task: Task = {
@@ -25,6 +39,7 @@ class TodoStore {
       createdAt: Date.now(),
     };
     this.tasks.push(task);
+    this.persist();
     return task;
   }
 
@@ -32,6 +47,7 @@ class TodoStore {
     const idx = this.findIndex(query);
     if (idx === -1) return null;
     const [removed] = this.tasks.splice(idx, 1);
+    this.persist();
     return removed;
   }
 
@@ -39,11 +55,13 @@ class TodoStore {
     const idx = this.findIndex(query);
     if (idx === -1) return null;
     this.tasks[idx] = { ...this.tasks[idx], done: !this.tasks[idx].done };
+    this.persist();
     return this.tasks[idx];
   }
 
   clear(): void {
     this.tasks = [];
+    this.persist();
   }
 
   list(): Task[] {
@@ -53,6 +71,14 @@ class TodoStore {
   private findIndex(query: string): number {
     const q = query.toLowerCase().trim();
     return this.tasks.findIndex((t) => t.text.toLowerCase().includes(q));
+  }
+
+  private persist(): void {
+    if (!this.storage) return;
+    this.storage.set(STORAGE_KEY, this.tasks).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[plugin-todo] persist failed:', err);
+    });
   }
 }
 

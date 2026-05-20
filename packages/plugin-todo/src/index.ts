@@ -1,12 +1,12 @@
 /**
- * @sisyphus/plugin-todo — the M3 second-plugin probe.
+ * @sisyphus/plugin-todo — the M3 second-plugin probe, with M4 persistence.
  *
- * Daemon entry. Exists to validate the router's multi-agent selection and the
- * card-rendering plug-in protocol, with a rule-based agent (no LLM) so the
- * test surface stays cheap and deterministic.
+ * Daemon entry. The store hooks ctx.storage during onActivate so the task
+ * list survives restarts.
  */
 import type { SisyphusPlugin } from '@sisyphus/kernel';
 import { todoManagerAgent } from './agents/todo-manager';
+import { store } from './store';
 
 const plugin: SisyphusPlugin = {
   manifest: {
@@ -30,6 +30,10 @@ const plugin: SisyphusPlugin = {
     },
   },
   agents: [todoManagerAgent],
+  async onActivate(ctx) {
+    await store.init(ctx.storage);
+    ctx.log('info', 'todo store initialised from persisted state');
+  },
 };
 
 export default plugin;

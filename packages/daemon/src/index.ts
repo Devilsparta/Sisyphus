@@ -32,6 +32,7 @@ import { Registry } from './registry';
 import { Router } from './router';
 import { createWSHub } from './ws';
 import { bus } from './event-bus';
+import { createPluginStorage } from './storage';
 
 import pluginBase from '@sisyphus/plugin-base';
 import pluginTodo from '@sisyphus/plugin-todo';
@@ -50,6 +51,7 @@ const startedAt = Date.now();
 async function activatePlugin(plugin: SisyphusPlugin): Promise<void> {
   const ctx: PluginContext = {
     registry,
+    storage: createPluginStorage(plugin.manifest.id),
     log: (level, msg, meta) => {
       // eslint-disable-next-line no-console
       console.log(
