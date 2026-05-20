@@ -12,12 +12,22 @@ import { Input } from '../components/input';
 import { ScrollArea } from '../components/scroll-area';
 import { useWorkspace } from '../workspace-state';
 
+interface ToolCallRecord {
+  id: string;
+  skill: string;
+  args: Record<string, unknown>;
+  result?: unknown;
+  error?: string;
+  done: boolean;
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   reasoning?: string;
   errored?: boolean;
   cards?: CardInstance[];
+  toolCalls?: ToolCallRecord[];
 }
 
 function extractCodeBlock(text: string): string | null {
@@ -85,6 +95,36 @@ export default function ChatPanel() {
           ...last,
           cards: [...(last.cards ?? []), event.card],
         };
+        return updated;
+      });
+    } else if (event.type === 'tool_call') {
+      setMessagesFn((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        updated[updated.length - 1] = {
+          ...last,
+          toolCalls: [
+            ...(last.toolCalls ?? []),
+            {
+              id: event.id,
+              skill: event.skill,
+              args: event.args,
+              done: false,
+            },
+          ],
+        };
+        return updated;
+      });
+    } else if (event.type === 'tool_result') {
+      setMessagesFn((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        const calls = (last.toolCalls ?? []).map((c) =>
+          c.id === event.id
+            ? { ...c, result: event.result, error: event.error, done: true }
+            : c,
+        );
+        updated[updated.length - 1] = { ...last, toolCalls: calls };
         return updated;
       });
     } else if (event.type === 'done') {
@@ -219,6 +259,37 @@ export default function ChatPanel() {
                   </pre>
                 </details>
               )}
+              {msg.toolCalls?.map((call) => (
+                <details
+                  key={call.id}
+                  className="mt-2 rounded border border-border bg-card/50 px-2 py-1 text-xs"
+                >
+                  <summary className="cursor-pointer select-none">
+                    {call.done ? (
+                      call.error ? (
+                        <span className="text-destructive">✗ {call.skill}</span>
+                      ) : (
+                        <span>✓ {call.skill}</span>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground">
+                        ⟳ {call.skill}…
+                      </span>
+                    )}
+                  </summary>
+                  <pre className="mt-1 whitespace-pre-wrap font-mono text-muted-foreground">
+                    args: {JSON.stringify(call.args, null, 2)}
+                    {call.done && (
+                      <>
+                        {'\n'}
+                        {call.error
+                          ? `error: ${call.error}`
+                          : `result: ${JSON.stringify(call.result, null, 2)}`}
+                      </>
+                    )}
+                  </pre>
+                </details>
+              ))}
               {msg.cards?.map((card, j) => {
                 const Renderer = getCardRenderer(card.type);
                 return Renderer ? (

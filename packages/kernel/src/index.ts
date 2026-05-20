@@ -129,6 +129,14 @@ export interface AgentRunContext {
   history: ChatMessage[];
   emit: (event: AgentEvent) => void;
   signal: AbortSignal;
+  /**
+   * Invoke a registered skill by id. The daemon dispatches to whichever
+   * plugin owns the skill handler. Agents should also `emit` matching
+   * `tool_call` / `tool_result` events so the UI can show the invocation
+   * trace; the platform does NOT emit those events automatically (the agent
+   * may choose to call a skill silently).
+   */
+  invokeSkill: (id: string, args: Record<string, unknown>) => Promise<unknown>;
 }
 
 /**

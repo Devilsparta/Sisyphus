@@ -100,6 +100,8 @@ export class Router {
         history: req.history,
         emit: observingEmit,
         signal: req.signal,
+        invokeSkill: (id, args) =>
+          this.registry.invokeSkill(id, args, req.conversationId),
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

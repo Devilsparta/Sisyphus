@@ -1,12 +1,18 @@
 /**
  * @sisyphus/plugin-base — the reference plugin.
  *
- * M2: provides the react-designer agent (verbatim port of the original
- * Next.js chat behaviour). Card / view contributions for the UI side ship
- * from a separate `./ui` entry — daemon doesn't need React.
+ * Contributes:
+ *   - react-designer agent (LLM-driven, generates jsx)
+ *   - time-helper agent (rule-based, demonstrates skill dispatch)
+ *   - current-time skill (read server clock)
+ *   - chat + canvas-preview UI views (in ./ui)
+ *
+ * The daemon entry stays React-free.
  */
 import type { SisyphusPlugin } from '@sisyphus/kernel';
 import { reactDesignerAgent } from './agents/react-designer';
+import { timeHelperAgent } from './agents/time-helper';
+import { currentTimeSkill, currentTimeHandler } from './skills/current-time';
 
 const plugin: SisyphusPlugin = {
   manifest: {
@@ -15,13 +21,16 @@ const plugin: SisyphusPlugin = {
     version: '0.1.0',
     dependencies: [],
     contributes: {
-      agents: [reactDesignerAgent.descriptor],
+      agents: [reactDesignerAgent.descriptor, timeHelperAgent.descriptor],
       views: [],
       cards: [],
-      skills: [],
+      skills: [currentTimeSkill],
     },
   },
-  agents: [reactDesignerAgent],
+  agents: [reactDesignerAgent, timeHelperAgent],
+  skillHandlers: {
+    [currentTimeSkill.id]: currentTimeHandler,
+  },
 };
 
 export default plugin;
