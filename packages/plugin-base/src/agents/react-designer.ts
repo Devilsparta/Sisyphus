@@ -26,6 +26,21 @@ export const reactDesignerAgent: AgentImpl = {
       'Generates self-contained React components based on natural-language descriptions, previewable in the canvas.',
     spawnHint:
       'use when the user wants to build, design, or iterate on a UI component or page prototype in React',
+    triggerKeywords: [
+      'build',
+      'design',
+      'create',
+      'make',
+      'component',
+      'ui',
+      'page',
+      'react',
+      'button',
+      'form',
+      'layout',
+      'prototype',
+      'sandpack',
+    ],
   },
 
   async run(userMessage: string, ctx: AgentRunContext): Promise<void> {

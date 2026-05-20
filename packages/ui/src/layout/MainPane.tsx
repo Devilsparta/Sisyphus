@@ -1,4 +1,4 @@
-import { listViews, getView } from './registry';
+import { listViews, getView } from '@sisyphus/kernel/ui';
 
 interface MainPaneProps {
   activeViewId: string | null;

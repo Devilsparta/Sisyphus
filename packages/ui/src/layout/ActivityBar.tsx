@@ -1,5 +1,11 @@
-import { MessageSquare, Eye, Layers, type LucideIcon } from 'lucide-react';
-import { listViews } from './registry';
+import {
+  MessageSquare,
+  Eye,
+  Layers,
+  ListTodo,
+  type LucideIcon,
+} from 'lucide-react';
+import { listViews } from '@sisyphus/kernel/ui';
 import { cn } from '@/lib/utils';
 
 interface ActivityBarProps {
@@ -13,6 +19,7 @@ const iconMap: Record<string, LucideIcon> = {
   'message-square': MessageSquare,
   eye: Eye,
   layers: Layers,
+  'list-todo': ListTodo,
 };
 
 export default function ActivityBar({

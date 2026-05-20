@@ -83,10 +83,18 @@ export interface AgentDescriptor {
   /** Short user-facing description shown in the UI. */
   description: string;
   /**
-   * Router hint: when should this agent be spawned? Read by the router prompt
-   * (M3+ with multiple agents) and by the UI to explain available capabilities.
+   * Router hint: when should this agent be spawned? Read by the router (and
+   * eventually fed to an LLM router prompt in M4+) and by the UI to explain
+   * available capabilities.
    */
   spawnHint: string;
+  /**
+   * Optional explicit keywords the router uses for cheap deterministic
+   * matching (M3 strategy). Higher precision than parsing the prose
+   * spawnHint. M4+ will treat these as bias signals layered atop an LLM
+   * router.
+   */
+  triggerKeywords?: string[];
 }
 
 /**

@@ -8,6 +8,7 @@ const config: Config = {
     './index.html',
     './src/**/*.{ts,tsx}',
     '../plugin-base/src/ui/**/*.{ts,tsx}',
+    '../plugin-todo/src/ui/**/*.{ts,tsx}',
   ],
   theme: {
     extend: {

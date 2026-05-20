@@ -3,7 +3,7 @@ import { Group, Panel, Separator } from 'react-resizable-panels';
 import ActivityBar from './ActivityBar';
 import SidePane from './SidePane';
 import MainPane from './MainPane';
-import { listViews } from './registry';
+import { listViews } from '@sisyphus/kernel/ui';
 
 /**
  * Sisyphus Panel Layout — VSCode-Lite four-region shell.

@@ -5,7 +5,8 @@ import {
   useCallback,
   type FormEvent,
 } from 'react';
-import type { AgentEvent } from '@sisyphus/kernel';
+import type { AgentEvent, CardInstance } from '@sisyphus/kernel';
+import { getCardRenderer } from '@sisyphus/kernel/ui';
 import { Button } from '../components/button';
 import { Input } from '../components/input';
 import { ScrollArea } from '../components/scroll-area';
@@ -16,6 +17,7 @@ interface Message {
   content: string;
   reasoning?: string;
   errored?: boolean;
+  cards?: CardInstance[];
 }
 
 function extractCodeBlock(text: string): string | null {
@@ -51,7 +53,9 @@ export default function ChatPanel() {
       state.content += event.text;
       setMessagesFn((prev) => {
         const updated = [...prev];
+        const last = updated[updated.length - 1];
         updated[updated.length - 1] = {
+          ...last,
           role: 'assistant',
           content: state.content,
           reasoning: state.reasoning,
@@ -64,10 +68,22 @@ export default function ChatPanel() {
       state.reasoning += event.text;
       setMessagesFn((prev) => {
         const updated = [...prev];
+        const last = updated[updated.length - 1];
         updated[updated.length - 1] = {
+          ...last,
           role: 'assistant',
           content: state.content,
           reasoning: state.reasoning,
+        };
+        return updated;
+      });
+    } else if (event.type === 'card') {
+      setMessagesFn((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        updated[updated.length - 1] = {
+          ...last,
+          cards: [...(last.cards ?? []), event.card],
         };
         return updated;
       });
@@ -87,7 +103,7 @@ export default function ChatPanel() {
         });
       }
     }
-    // card / tool_call / tool_result land in M3.
+    // tool_call / tool_result land in M4+.
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -203,6 +219,22 @@ export default function ChatPanel() {
                   </pre>
                 </details>
               )}
+              {msg.cards?.map((card, j) => {
+                const Renderer = getCardRenderer(card.type);
+                return Renderer ? (
+                  <Renderer
+                    key={`card-${j}`}
+                    payload={card.payload}
+                  />
+                ) : (
+                  <div
+                    key={`card-${j}`}
+                    className="my-2 rounded border border-dashed border-border p-2 text-xs text-muted-foreground"
+                  >
+                    [no renderer registered for card type: {card.type}]
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>

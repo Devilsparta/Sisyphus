@@ -34,6 +34,7 @@ import { createWSHub } from './ws';
 import { bus } from './event-bus';
 
 import pluginBase from '@sisyphus/plugin-base';
+import pluginTodo from '@sisyphus/plugin-todo';
 
 // Load both .env and .env.local; the latter overrides and is the convention
 // for unchecked-in secrets (used here for OPENAI_API_KEY etc).
@@ -81,6 +82,7 @@ async function activatePlugin(plugin: SisyphusPlugin): Promise<void> {
 }
 
 await activatePlugin(pluginBase);
+await activatePlugin(pluginTodo);
 
 const wsHub = createWSHub({
   onConnection(send) {

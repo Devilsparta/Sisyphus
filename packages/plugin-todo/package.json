@@ -1,0 +1,39 @@
+{
+  "name": "@sisyphus/plugin-todo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Second reference plugin: simple todo manager (rule-based agent, no LLM). Exists to compress-test the extension surface — multi-agent routing, custom card payloads, side-region views.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ui": "./src/ui/index.tsx"
+  },
+  "sisyphus": {
+    "id": "plugin-todo",
+    "displayName": "Todo Manager",
+    "version": "0.1.0",
+    "dependencies": [],
+    "contributes": {
+      "agents": ["plugin-todo.agent.todo-manager"],
+      "views": ["plugin-todo.view.task-list"],
+      "cards": ["plugin-todo.card.task-list"],
+      "skills": []
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sisyphus/kernel": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18.3.0",
+    "react": "^18.3.1",
+    "typescript": "^5"
+  }
+}
