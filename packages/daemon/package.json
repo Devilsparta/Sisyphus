@@ -13,6 +13,7 @@
   "dependencies": {
     "@hono/node-server": "^1.13.0",
     "@sisyphus/kernel": "workspace:*",
+    "@sisyphus/plugin-base": "workspace:*",
     "dotenv": "^16.4.5",
     "hono": "^4.6.0",
     "openai": "^6.33.0",

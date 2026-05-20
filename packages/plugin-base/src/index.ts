@@ -1,10 +1,12 @@
 /**
- * @sisyphus/plugin-base — reference plugin.
+ * @sisyphus/plugin-base — the reference plugin.
  *
- * M0 stub. Real contributions (Sandpack canvas view, jsx card renderer,
- * default agent system prompt, etc.) migrate here from packages/ui in M2.
+ * M2: provides the react-designer agent (verbatim port of the original
+ * Next.js chat behaviour). Card / view contributions for the UI side ship
+ * from a separate `./ui` entry — daemon doesn't need React.
  */
 import type { SisyphusPlugin } from '@sisyphus/kernel';
+import { reactDesignerAgent } from './agents/react-designer';
 
 const plugin: SisyphusPlugin = {
   manifest: {
@@ -13,11 +15,13 @@ const plugin: SisyphusPlugin = {
     version: '0.1.0',
     dependencies: [],
     contributes: {
+      agents: [reactDesignerAgent.descriptor],
       views: [],
       cards: [],
       skills: [],
     },
   },
+  agents: [reactDesignerAgent],
 };
 
 export default plugin;

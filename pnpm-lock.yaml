@@ -16,6 +16,9 @@ importers:
       '@sisyphus/kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@sisyphus/plugin-base':
+        specifier: workspace:*
+        version: link:../plugin-base
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
@@ -50,25 +53,43 @@ importers:
 
   packages/plugin-base:
     dependencies:
-      '@sisyphus/kernel':
-        specifier: workspace:*
-        version: link:../kernel
-    devDependencies:
-      typescript:
-        specifier: ^5
-        version: 5.0.2
-
-  packages/ui:
-    dependencies:
       '@codesandbox/sandpack-react':
         specifier: ^2.20.0
         version: 2.20.0(react-dom@18.3.1)(react@18.3.1)
       '@sisyphus/kernel':
         specifier: workspace:*
         version: link:../kernel
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      openai:
+        specifier: ^6.33.0
+        version: 6.33.0(ws@8.20.1)
+      tailwind-merge:
+        specifier: ^3.5.0
+        version: 3.5.0
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.0.0
+      '@types/react':
+        specifier: ^18.3.0
+        version: 18.3.0
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      typescript:
+        specifier: ^5
+        version: 5.0.2
+
+  packages/ui:
+    dependencies:
+      '@sisyphus/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@sisyphus/plugin-base':
+        specifier: workspace:*
+        version: link:../plugin-base
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -1358,12 +1379,6 @@ packages:
       fsevents: 2.3.3
     dev: true
 
-  /class-variance-authority@0.7.1:
-    resolution: {integrity: sha512-Ka+9Trutv7G8M6WT6SeiRWz792K5qEqIGEGzXKhAE6xOWAY6pPH8U+9IY3oCMv6kqTmLsv7Xh/2w2RigkePMsg==}
-    dependencies:
-      clsx: 2.1.1
-    dev: false
-
   /clean-set@1.1.2:
     resolution: {integrity: sha512-cA8uCj0qSoG9e0kevyOWXwPaELRPVg5Pxp6WskLMwerx257Zfnh8Nl0JBH59d7wQzij2CK7qEfJQK3RjuKKIug==}
     dev: false
@@ -1729,7 +1744,6 @@ packages:
     hasBin: true
     dependencies:
       js-tokens: 4.0.0
-    dev: false
 
   /lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
@@ -1979,7 +1993,6 @@ packages:
     engines: {node: '>=0.10.0'}
     dependencies:
       loose-envify: 1.4.0
-    dev: false
 
   /read-cache@1.0.0:
     resolution: {integrity: sha512-Owdv/Ft7IjOgm/i0xvNDZ1LrRANRfew4b2prF3OWMQLxLfu3bS8FVhCsrSCMK4lR56Y9ya+AThoTpDCTxCmpRA==}

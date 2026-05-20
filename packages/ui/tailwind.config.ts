@@ -2,7 +2,13 @@ import type { Config } from 'tailwindcss';
 
 const config: Config = {
   darkMode: 'class',
-  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  // Scan plugin-base UI too — its components use Tailwind utility classes
+  // and must be present in the JIT scan or styles drop out.
+  content: [
+    './index.html',
+    './src/**/*.{ts,tsx}',
+    '../plugin-base/src/ui/**/*.{ts,tsx}',
+  ],
   theme: {
     extend: {
       colors: {

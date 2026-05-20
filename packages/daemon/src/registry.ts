@@ -1,8 +1,8 @@
 /**
  * Daemon-side Registry — the platform's source of truth for what views,
- * cards, and skills currently exist. Plugins register their contributions
- * through this object during activation; the HTTP API exposes read access
- * to the UI (and to other plugins, indirectly).
+ * cards, skills, and agents currently exist. Plugins register their
+ * contributions through this object during activation; the HTTP API exposes
+ * read access to the UI (and to other plugins, indirectly).
  *
  * Mutations publish on the internal event bus so the WS hub can rebroadcast
  * registry deltas to connected UI clients.
@@ -16,14 +16,16 @@
  */
 import {
   KernelEvents,
+  type AgentDescriptor,
+  type AgentImpl,
   type CardDescriptor,
   type Disposable,
   type Region,
   type RegistryAPI,
+  type RegistrySnapshot,
   type SkillDescriptor,
   type SkillHandler,
   type ViewDescriptor,
-  type RegistrySnapshot,
 } from '@sisyphus/kernel';
 import { bus } from './event-bus';
 
@@ -36,6 +38,7 @@ export class Registry implements RegistryAPI {
   private views = new Map<string, ViewDescriptor>();
   private cards = new Map<string, CardDescriptor>();
   private skills = new Map<string, SkillEntry>();
+  private agents = new Map<string, AgentImpl>();
 
   registerView(view: ViewDescriptor): Disposable {
     if (this.views.has(view.id)) {
@@ -82,6 +85,23 @@ export class Registry implements RegistryAPI {
     };
   }
 
+  registerAgent(agent: AgentImpl): Disposable {
+    if (this.agents.has(agent.descriptor.id)) {
+      throw new Error(`Agent id collision: ${agent.descriptor.id}`);
+    }
+    this.agents.set(agent.descriptor.id, agent);
+    bus.emit(KernelEvents.RegistryAgentAdded, agent.descriptor);
+    return {
+      dispose: () => {
+        if (this.agents.delete(agent.descriptor.id)) {
+          bus.emit(KernelEvents.RegistryAgentRemoved, {
+            id: agent.descriptor.id,
+          });
+        }
+      },
+    };
+  }
+
   queryViews(filter?: { region?: Region }): ViewDescriptor[] {
     const all = Array.from(this.views.values());
     return filter?.region
@@ -97,11 +117,21 @@ export class Registry implements RegistryAPI {
     return Array.from(this.skills.values()).map((s) => s.descriptor);
   }
 
+  queryAgents(): AgentDescriptor[] {
+    return Array.from(this.agents.values()).map((a) => a.descriptor);
+  }
+
+  /** Lookup an agent impl by id (router uses this to dispatch). */
+  getAgent(id: string): AgentImpl | undefined {
+    return this.agents.get(id);
+  }
+
   snapshot(): RegistrySnapshot {
     return {
       views: this.queryViews(),
       cards: this.queryCards(),
       skills: this.querySkills(),
+      agents: this.queryAgents(),
     };
   }
 

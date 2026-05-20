@@ -4,7 +4,7 @@ import {
   SandpackPreview,
   SandpackCodeEditor,
 } from "@codesandbox/sandpack-react";
-import { useWorkspace } from "@/layout/workspace-state";
+import { useWorkspace } from "../workspace-state";
 
 const DEFAULT_CODE = `export default function App() {
   return (
