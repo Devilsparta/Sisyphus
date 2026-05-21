@@ -1,20 +1,24 @@
 /**
- * UI-side plugin loader.
+ * UI-side plugin loader (M18: unified dev/prod path).
  *
- * Dev mode (import.meta.env.DEV):
- *   Hardcoded static imports of @sisyphus/plugin-base/ui and
- *   @sisyphus/plugin-todo/ui. Keeps Vite HMR working and avoids the
- *   dual-React-instance hazard you'd hit if Vite-internal React met
- *   esbuild-external React in the same page.
+ * Both dev and prod fetch /api/plugins from the daemon and dynamic-import
+ * each plugin's UI bundle (dist/ui.mjs) over HTTP. There is no static
+ * `import '@sisyphus/plugin-foo/ui'` anywhere in the host UI — plugins
+ * are completely decoupled from the host binary.
  *
- * Prod mode:
- *   1. Fetch /api/plugins for the daemon's list of loaded plugins.
- *   2. For each `hasUiBundle: true`, dynamic-import /api/plugins/<id>/ui.mjs.
- *   3. Index.html's importmap maps `react`, `react-dom`, `react/jsx-runtime`
- *      etc to host-controlled URLs so plugin bundles and the host share a
- *      single React instance.
- *   4. Per-plugin try/catch — a broken bundle skips with a console.error
- *      and the rest still load.
+ * dev workflow:
+ *   - Each plugin runs `pnpm dev` (esbuild --watch) → keeps dist/ui.mjs fresh.
+ *   - Daemon runs with SISYPHUS_DEV=1 → fs.watch dist/ui.mjs → broadcasts
+ *     plugin.ui.bundle.changed.
+ *   - main.tsx listens and triggers location.reload() so the next mount
+ *     re-fetches the bundle.
+ *
+ * The importmap on index.html maps `react` / `react-dom` / `react/jsx-runtime`
+ * to host-controlled URLs so plugin bundles and the host share a single
+ * React instance regardless of where (Vite vs esbuild) they were built.
+ *
+ * Per-plugin try/catch — a broken bundle skips with a console.error and
+ * the rest still load.
  */
 import type { ComponentType, ReactNode } from 'react';
 import type { CardDescriptor, ViewDescriptor } from '@sisyphus/kernel';
@@ -39,65 +43,56 @@ interface DaemonPluginInfo {
   hasUiBundle: boolean;
 }
 
-async function loadDev(): Promise<Array<{ id: string; mod: PluginUIModule }>> {
-  // Static imports so Vite's dev-server resolves through normal module
-  // graph (and React stays a single Vite-internal instance).
-  const [base, todo] = await Promise.all([
-    import('@sisyphus/plugin-base/ui'),
-    import('@sisyphus/plugin-todo/ui'),
-  ]);
-  return [
-    { id: 'plugin-base', mod: base as unknown as PluginUIModule },
-    { id: 'plugin-todo', mod: todo as unknown as PluginUIModule },
-  ];
-}
-
-async function loadProd(): Promise<Array<{ id: string; mod: PluginUIModule }>> {
-  let list: DaemonPluginInfo[];
+async function fetchPluginList(): Promise<DaemonPluginInfo[]> {
   try {
     const res = await fetch('/api/plugins');
     if (!res.ok) throw new Error(`/api/plugins → ${res.status}`);
-    list = (await res.json()) as DaemonPluginInfo[];
+    return (await res.json()) as DaemonPluginInfo[];
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[plugin-loader] failed to fetch /api/plugins:', err);
     return [];
   }
+}
 
-  const results = await Promise.all(
-    list
-      .filter((p) => p.hasUiBundle)
-      .map(async (p) => {
-        try {
-          const url = `/api/plugins/${p.id}/ui.mjs`;
-          // @vite-ignore — dynamic import URL is runtime-only; Vite must
-          // not try to pre-bundle it. The importmap on index.html
-          // handles `react` / `react-dom` resolution in the loaded bundle.
-          const mod = (await import(/* @vite-ignore */ url)) as PluginUIModule;
-          return { id: p.id, mod };
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error(
-            `[plugin-loader] failed to load plugin "${p.id}" UI bundle:`,
-            err,
-          );
-          return null;
-        }
-      }),
-  );
-  return results.filter(
-    (r): r is { id: string; mod: PluginUIModule } => r !== null,
-  );
+async function importBundle(
+  pluginId: string,
+): Promise<PluginUIModule | null> {
+  try {
+    const url = `/api/plugins/${pluginId}/ui.mjs`;
+    // @vite-ignore — runtime URL; Vite must not try to pre-bundle it.
+    // index.html's importmap handles `react` etc inside the loaded bundle.
+    const mod = (await import(/* @vite-ignore */ url)) as PluginUIModule;
+    return mod;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[plugin-loader] failed to load plugin "${pluginId}" UI bundle:`,
+      err,
+    );
+    return null;
+  }
 }
 
 export async function loadAllPluginUI(): Promise<{
   loaded: string[];
   failed: string[];
 }> {
-  const entries = import.meta.env.DEV ? await loadDev() : await loadProd();
+  const list = await fetchPluginList();
+  const candidates = list.filter((p) => p.hasUiBundle);
+
+  const results = await Promise.all(
+    candidates.map(async (p) => {
+      const mod = await importBundle(p.id);
+      return mod ? { id: p.id, mod } : null;
+    }),
+  );
+
   const loaded: string[] = [];
   const failed: string[] = [];
-  for (const { id, mod } of entries) {
+  for (const entry of results) {
+    if (!entry) continue;
+    const { id, mod } = entry;
     try {
       if (mod.views) {
         for (const v of mod.views) registerView(v.descriptor, v.Component);

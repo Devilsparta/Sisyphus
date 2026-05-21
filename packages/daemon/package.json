@@ -13,14 +13,14 @@
   "dependencies": {
     "@hono/node-server": "^1.13.0",
     "@sisyphus/kernel": "workspace:*",
-    "@sisyphus/plugin-base": "workspace:*",
-    "@sisyphus/plugin-todo": "workspace:*",
     "dotenv": "^16.4.5",
     "hono": "^4.6.0",
     "openai": "^6.33.0",
     "ws": "^8.20.1"
   },
   "devDependencies": {
+    "@sisyphus/plugin-base": "workspace:*",
+    "@sisyphus/plugin-todo": "workspace:*",
     "@types/node": "^20",
     "@types/ws": "^8.18.1",
     "tsx": "^4.19.0",
