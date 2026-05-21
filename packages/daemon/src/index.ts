@@ -63,6 +63,8 @@ const router = new Router(registry);
 const startedAt = Date.now();
 
 async function activatePlugin(plugin: SisyphusPlugin): Promise<void> {
+  // Record manifest first so ACL lookups during onActivate already see it.
+  registry.registerPluginManifest(plugin.manifest);
   const scopedRegistry = new ScopedRegistry(registry, plugin.manifest.id);
   const ctx: PluginContext = {
     registry: scopedRegistry,

@@ -20,6 +20,7 @@ import {
   type AgentImpl,
   type CardDescriptor,
   type Disposable,
+  type PluginManifest,
   type Region,
   type RegistryAPI,
   type RegistrySnapshot,
@@ -39,6 +40,9 @@ export class Registry implements RegistryAPI {
   private cards = new Map<string, CardDescriptor>();
   private skills = new Map<string, SkillEntry>();
   private agents = new Map<string, AgentImpl>();
+  // plugin id → manifest, for ACL lookups (which skills can an agent
+  // owned by plugin X invoke?).
+  private manifests = new Map<string, PluginManifest>();
 
   registerView(view: ViewDescriptor): Disposable {
     if (this.views.has(view.id)) {
@@ -124,6 +128,15 @@ export class Registry implements RegistryAPI {
   /** Lookup an agent impl by id (router uses this to dispatch). */
   getAgent(id: string): AgentImpl | undefined {
     return this.agents.get(id);
+  }
+
+  /** Record a plugin's manifest so router can look up its requires.skills. */
+  registerPluginManifest(manifest: PluginManifest): void {
+    this.manifests.set(manifest.id, manifest);
+  }
+
+  getPluginManifest(id: string): PluginManifest | undefined {
+    return this.manifests.get(id);
   }
 
   snapshot(): RegistrySnapshot {

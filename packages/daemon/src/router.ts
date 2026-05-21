@@ -3,26 +3,23 @@
  *
  * Selection strategy (M8 hybrid):
  *   1 agent  → fast-path.
- *   ≥2 agents:
- *     a. Score by triggerKeyword substring matches.
- *     b. If the top score is ≥2 AND beats the runner-up by ≥2, accept it
- *        (confident keyword match, no LLM call needed).
- *     c. Otherwise (tie / low score / ambiguous) → call an LLM to pick.
- *        Model: SISYPHUS_ROUTER_MODEL → OPENAI_MODEL fallback.
- *        Prompt: list agents w/ description + spawnHint, ask for the id.
- *        Response sanitised by regex (LLM may wrap with extra text).
- *     d. If the LLM call fails or returns an unknown id, fall back to the
- *        keyword winner (top.score's agent).
+ *   ≥2 agents → keyword score; confident winner takes fast-path; ambiguous
+ *               cases consult an LLM (SISYPHUS_ROUTER_MODEL → OPENAI_MODEL
+ *               → 'gpt-4o' fallback).
  *
- * Per project charter: the router doesn't intercept or rewrite the child
- * agent's token stream. It only observes `done` for completion/retry/timeout
- * decisions.
+ * Skill ACL (M13): the per-agent invokeSkill helper enforces
+ *   - same-namespace calls (skill id starts with the agent's plugin id) → allow
+ *   - cross-plugin calls require the agent's plugin manifest to list the
+ *     target skill id under `requires.skills`
+ *   - otherwise → throw before dispatch (the agent surfaces the error as
+ *     a tool_result with `error`).
  */
 import type {
   AgentDescriptor,
   AgentEvent,
   AgentImpl,
   ChatMessage,
+  PluginManifest,
 } from '@sisyphus/kernel';
 import OpenAI from 'openai';
 import type { Registry } from './registry';
@@ -47,6 +44,28 @@ interface ScoredAgent {
 }
 
 const ID_PATTERN = /[a-zA-Z0-9_-]+\.agent\.[a-zA-Z0-9_.-]+/;
+const AGENT_SEPARATOR = '.agent.';
+
+/** Recover the owning plugin id from an agent id (everything before .agent.). */
+function pluginIdFromAgent(agentId: string): string | null {
+  const idx = agentId.indexOf(AGENT_SEPARATOR);
+  return idx > 0 ? agentId.slice(0, idx) : null;
+}
+
+/**
+ * Check whether a plugin is allowed to invoke a given skill.
+ *  - same-namespace → always allowed
+ *  - cross-plugin → must be listed in manifest.requires.skills
+ */
+function canInvokeSkill(
+  callerPluginId: string,
+  skillId: string,
+  callerManifest: PluginManifest | undefined,
+): boolean {
+  if (skillId.startsWith(`${callerPluginId}.`)) return true;
+  const required = callerManifest?.requires?.skills ?? [];
+  return required.includes(skillId);
+}
 
 export class Router {
   constructor(private registry: Registry) {}
@@ -108,7 +127,6 @@ Best agent id:`;
     const raw = completion.choices[0]?.message?.content?.trim();
     if (!raw) return null;
 
-    // LLMs occasionally wrap the id with quotes / explanation; extract.
     const match = raw.match(ID_PATTERN);
     if (match) return match[0];
     return raw;
@@ -128,20 +146,12 @@ Best agent id:`;
     const top = scored[0];
     const second = scored[1];
 
-    // Confident keyword win: top has hits AND beats runner-up by at least 1.
-    // "add buy milk" scores todo-manager:1 / others:0 → fast-path. A keyword
-    // collision producing a tie (or all-zero) still falls through to the LLM.
     if (top.score > 0 && top.score > second.score) {
       return this.registry.getAgent(top.desc.id) ?? null;
     }
 
-    // Ambiguous → consult LLM. On any failure, fall back to keyword winner.
     try {
-      const picked = await this.llmSelect(
-        userMessage,
-        agents,
-        signal,
-      );
+      const picked = await this.llmSelect(userMessage, agents, signal);
       if (picked) {
         const agent = this.registry.getAgent(picked);
         if (agent) return agent;
@@ -182,14 +192,36 @@ Best agent id:`;
       req.emit(event);
     };
 
+    // ACL setup: figure out which plugin owns this agent so invokeSkill
+    // can be gated against the plugin's manifest.requires.skills.
+    const ownerPluginId = pluginIdFromAgent(agent.descriptor.id);
+    const ownerManifest = ownerPluginId
+      ? this.registry.getPluginManifest(ownerPluginId)
+      : undefined;
+    const scopedInvokeSkill = async (
+      id: string,
+      args: Record<string, unknown>,
+    ): Promise<unknown> => {
+      if (!ownerPluginId) {
+        throw new Error(
+          `Agent "${agent.descriptor.id}" lacks a recognizable plugin namespace`,
+        );
+      }
+      if (!canInvokeSkill(ownerPluginId, id, ownerManifest)) {
+        throw new Error(
+          `Plugin "${ownerPluginId}" is not allowed to invoke skill "${id}". Add it to manifest.requires.skills.`,
+        );
+      }
+      return this.registry.invokeSkill(id, args, req.conversationId);
+    };
+
     try {
       await agent.run(req.userMessage, {
         conversationId: req.conversationId,
         history: req.history,
         emit: observingEmit,
         signal: req.signal,
-        invokeSkill: (id, args) =>
-          this.registry.invokeSkill(id, args, req.conversationId),
+        invokeSkill: scopedInvokeSkill,
         querySkills: () => this.registry.querySkills(),
       });
     } catch (err) {

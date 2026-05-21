@@ -177,6 +177,18 @@ export interface PluginManifest {
     skills?: SkillDescriptor[];
     agents?: AgentDescriptor[];
   };
+  /**
+   * Cross-plugin dependencies the daemon will gate at invocation time.
+   * By default a plugin's agents can only invoke skills under their own
+   * namespace; to call another plugin's skill the id must be listed here.
+   *
+   * Cross-plugin view/card use is mediated by registry queries (already
+   * shared) so doesn't need a declaration. Skills are different because
+   * they're invocable side-effects.
+   */
+  requires?: {
+    skills?: string[];
+  };
 }
 
 // ─── Plugin runtime entry (default export from plugin's main) ────────────────
