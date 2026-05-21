@@ -33,9 +33,7 @@ import { Router } from './router';
 import { createWSHub } from './ws';
 import { bus } from './event-bus';
 import { createPluginStorage } from './storage';
-
-import pluginBase from '@sisyphus/plugin-base';
-import pluginTodo from '@sisyphus/plugin-todo';
+import { resolveEnabledPlugins, loadPlugin } from './plugin-loader';
 
 // Load both .env and .env.local; the latter overrides and is the convention
 // for unchecked-in secrets (used here for OPENAI_API_KEY etc).
@@ -83,8 +81,24 @@ async function activatePlugin(plugin: SisyphusPlugin): Promise<void> {
   );
 }
 
-await activatePlugin(pluginBase);
-await activatePlugin(pluginTodo);
+// Resolve the plugin list from ~/.sisyphus/plugins.config.json (falls back to
+// the two workspace plugins in dev). Activate each independently so one
+// broken plugin doesn't take down the others.
+const enabledPluginNames = await resolveEnabledPlugins();
+// eslint-disable-next-line no-console
+console.log('[sisyphus-daemon] enabled plugins:', enabledPluginNames);
+for (const name of enabledPluginNames) {
+  try {
+    const plugin = await loadPlugin(name);
+    await activatePlugin(plugin);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[sisyphus-daemon] failed to load plugin "${name}":`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
 
 const wsHub = createWSHub({
   onConnection(send) {
