@@ -34,6 +34,8 @@ import { createWSHub } from './ws';
 import { bus } from './event-bus';
 import { createPluginStorage } from './storage';
 import { resolveEnabledPlugins, loadPlugin } from './plugin-loader';
+import { ScopedRegistry } from './scoped-registry';
+import { topoSortPlugins } from './plugin-graph';
 
 // Load both .env and .env.local; the latter overrides and is the convention
 // for unchecked-in secrets (used here for OPENAI_API_KEY etc).
@@ -47,8 +49,9 @@ const router = new Router(registry);
 const startedAt = Date.now();
 
 async function activatePlugin(plugin: SisyphusPlugin): Promise<void> {
+  const scopedRegistry = new ScopedRegistry(registry, plugin.manifest.id);
   const ctx: PluginContext = {
-    registry,
+    registry: scopedRegistry,
     storage: createPluginStorage(plugin.manifest.id),
     log: (level, msg, meta) => {
       // eslint-disable-next-line no-console
@@ -59,16 +62,18 @@ async function activatePlugin(plugin: SisyphusPlugin): Promise<void> {
     },
   };
   await plugin.onActivate?.(ctx);
-  // Register declared agents
+  // Register declared agents through the scoped facade so namespace
+  // enforcement applies whether the plugin uses ctx.registry or the
+  // declarative `agents` array.
   for (const agent of plugin.agents ?? []) {
-    registry.registerAgent(agent);
+    scopedRegistry.registerAgent(agent);
   }
   // Register declared skill handlers (paired with manifest descriptors)
   const skillDescs = plugin.manifest.contributes?.skills ?? [];
   for (const desc of skillDescs) {
     const handler = plugin.skillHandlers?.[desc.id];
     if (handler) {
-      registry.registerSkill(desc, handler);
+      scopedRegistry.registerSkill(desc, handler);
     }
   }
   // eslint-disable-next-line no-console
@@ -82,19 +87,45 @@ async function activatePlugin(plugin: SisyphusPlugin): Promise<void> {
 }
 
 // Resolve the plugin list from ~/.sisyphus/plugins.config.json (falls back to
-// the two workspace plugins in dev). Activate each independently so one
-// broken plugin doesn't take down the others.
+// the two workspace plugins in dev). Load all → topo-sort by manifest
+// dependencies → activate in order. Per-step failures are caught so one
+// broken plugin doesn't take down the rest.
 const enabledPluginNames = await resolveEnabledPlugins();
 // eslint-disable-next-line no-console
 console.log('[sisyphus-daemon] enabled plugins:', enabledPluginNames);
+
+const loadedPlugins: SisyphusPlugin[] = [];
 for (const name of enabledPluginNames) {
   try {
-    const plugin = await loadPlugin(name);
-    await activatePlugin(plugin);
+    loadedPlugins.push(await loadPlugin(name));
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(
       `[sisyphus-daemon] failed to load plugin "${name}":`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
+let activationOrder: SisyphusPlugin[];
+try {
+  activationOrder = topoSortPlugins(loadedPlugins);
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error(
+    '[sisyphus-daemon] plugin dependency graph invalid, falling back to load order:',
+    err instanceof Error ? err.message : err,
+  );
+  activationOrder = loadedPlugins;
+}
+
+for (const plugin of activationOrder) {
+  try {
+    await activatePlugin(plugin);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[sisyphus-daemon] failed to activate plugin "${plugin.manifest.id}":`,
       err instanceof Error ? err.message : err,
     );
   }
