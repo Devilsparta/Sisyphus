@@ -31,7 +31,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build:ui": "node build-ui.mjs",
-    "build": "pnpm build:ui"
+    "build": "pnpm build:ui",
+    "dev": "node build-ui.mjs --watch"
   },
   "dependencies": {
     "@sisyphus/kernel": "workspace:*"

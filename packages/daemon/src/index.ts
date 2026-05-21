@@ -37,6 +37,7 @@ import { resolveEnabledPlugins, loadPlugin } from './plugin-loader';
 import { ScopedRegistry } from './scoped-registry';
 import { topoSortPlugins } from './plugin-graph';
 import { requireApiKey, isWSAuthorized } from './auth';
+import { createDevWatcher, isDevModeEnabled } from './dev-watcher';
 import {
   reloadConfig,
   getMergedConfig,
@@ -191,6 +192,17 @@ for (const event of [
   KernelEvents.RegistryAgentRemoved,
 ]) {
   bus.on(event, (data) => wsHub.broadcast(event, data));
+}
+
+// Dev mode: watch plugin UI bundle files for esbuild --watch output and
+// poke the UI to hot-reload the affected plugin.
+if (isDevModeEnabled()) {
+  // eslint-disable-next-line no-console
+  console.log('[sisyphus-daemon] SISYPHUS_DEV=1, starting plugin watcher');
+  const devWatcher = createDevWatcher(registry, (event, data) =>
+    wsHub.broadcast(event, data),
+  );
+  devWatcher.start();
 }
 
 interface ChatRequest {

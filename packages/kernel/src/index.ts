@@ -344,6 +344,13 @@ export const KernelEvents = {
   RegistrySkillRemoved: 'registry.skill.removed',
   RegistryAgentAdded: 'registry.agent.added',
   RegistryAgentRemoved: 'registry.agent.removed',
+  /**
+   * Dev-mode only: emitted by the daemon when a plugin's UI bundle file
+   * (dist/ui.mjs) changes on disk. UI hot-reloads the plugin in response.
+   * Payload: { pluginId: string, version: number } — version is a
+   * monotonic counter so the UI cache-busts dynamic imports cleanly.
+   */
+  PluginUiBundleChanged: 'plugin.ui.bundle.changed',
 } as const;
 
 export type KernelEventName = (typeof KernelEvents)[keyof typeof KernelEvents];

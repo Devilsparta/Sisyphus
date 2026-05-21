@@ -30,7 +30,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build:ui": "node build-ui.mjs",
-    "build": "pnpm build:ui"
+    "build": "pnpm build:ui",
+    "dev": "node build-ui.mjs --watch"
   },
   "dependencies": {
     "@codesandbox/sandpack-react": "^2.20.0",

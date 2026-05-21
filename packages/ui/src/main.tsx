@@ -30,6 +30,17 @@ ws.on(KernelEvents.RegistrySnapshot, (data) => {
   console.log('[ws] registry.snapshot', data);
 });
 
+// Dev mode (daemon SISYPHUS_DEV=1): plugin's `pnpm dev` rebuilds
+// dist/ui.mjs, daemon notices, broadcasts this event. Simplest correct
+// thing to do — full page reload. React state will reset, but plugin-state
+// recovery is the plugin's job. State-preserving hot-replace is a future
+// enhancement; for now, the iteration is plugin save → ~200ms → page refresh.
+ws.on(KernelEvents.PluginUiBundleChanged, (data) => {
+  // eslint-disable-next-line no-console
+  console.log('[ws] plugin.ui.bundle.changed → reloading page', data);
+  window.location.reload();
+});
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

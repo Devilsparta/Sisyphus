@@ -1,14 +1,16 @@
 /**
  * Build the browser-loadable UI bundle for plugin-todo.
  * See packages/plugin-base/build-ui.mjs for design notes.
+ *
+ * Pass --watch to rebuild on source changes.
  */
-import { build } from 'esbuild';
+import { context, build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-await build({
+const config = {
   entryPoints: [path.join(__dirname, 'src/ui/index.tsx')],
   outfile: path.join(__dirname, 'dist/ui.mjs'),
   bundle: true,
@@ -27,4 +29,13 @@ await build({
   sourcemap: true,
   minify: false,
   logLevel: 'info',
-});
+};
+
+if (process.argv.includes('--watch')) {
+  const ctx = await context(config);
+  await ctx.watch();
+  // eslint-disable-next-line no-console
+  console.log('[plugin-todo] esbuild watch started');
+} else {
+  await build(config);
+}
