@@ -7,7 +7,8 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./ui": "./src/ui/index.tsx"
+    "./ui": "./src/ui/index.tsx",
+    "./package.json": "./package.json"
   },
   "sisyphus": {
     "id": "plugin-todo",
@@ -15,14 +16,22 @@
     "version": "0.1.0",
     "dependencies": [],
     "contributes": {
-      "agents": ["plugin-todo.agent.todo-manager"],
-      "views": ["plugin-todo.view.task-list"],
-      "cards": ["plugin-todo.card.task-list"],
+      "agents": [
+        "plugin-todo.agent.todo-manager"
+      ],
+      "views": [
+        "plugin-todo.view.task-list"
+      ],
+      "cards": [
+        "plugin-todo.card.task-list"
+      ],
       "skills": []
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:ui": "node build-ui.mjs",
+    "build": "pnpm build:ui"
   },
   "dependencies": {
     "@sisyphus/kernel": "workspace:*"
@@ -33,6 +42,7 @@
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18.3.0",
+    "esbuild": "^0.28.0",
     "react": "^18.3.1",
     "typescript": "^5"
   }

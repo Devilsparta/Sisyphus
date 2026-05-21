@@ -62,9 +62,18 @@ export const registry = new Registry();
 const router = new Router(registry);
 const startedAt = Date.now();
 
-async function activatePlugin(plugin: SisyphusPlugin): Promise<void> {
-  // Record manifest first so ACL lookups during onActivate already see it.
-  registry.registerPluginManifest(plugin.manifest);
+async function activatePlugin(
+  plugin: SisyphusPlugin,
+  packageName: string,
+  uiBundlePath: string | null,
+): Promise<void> {
+  // Record manifest + provenance first so ACL lookups during onActivate
+  // already see it, and the UI-bundle endpoint can resolve immediately.
+  registry.registerPluginRecord({
+    manifest: plugin.manifest,
+    packageName,
+    uiBundlePath,
+  });
   const scopedRegistry = new ScopedRegistry(registry, plugin.manifest.id);
   const ctx: PluginContext = {
     registry: scopedRegistry,
@@ -110,10 +119,21 @@ const enabledPluginNames = await resolveEnabledPlugins();
 // eslint-disable-next-line no-console
 console.log('[sisyphus-daemon] enabled plugins:', enabledPluginNames);
 
-const loadedPlugins: SisyphusPlugin[] = [];
+interface LoadedEntry {
+  packageName: string;
+  plugin: SisyphusPlugin;
+  uiBundlePath: string | null;
+}
+
+const loadedEntries: LoadedEntry[] = [];
 for (const name of enabledPluginNames) {
   try {
-    loadedPlugins.push(await loadPlugin(name));
+    const loaded = await loadPlugin(name);
+    loadedEntries.push({
+      packageName: loaded.packageName,
+      plugin: loaded.plugin,
+      uiBundlePath: loaded.uiBundlePath,
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(
@@ -123,25 +143,30 @@ for (const name of enabledPluginNames) {
   }
 }
 
-let activationOrder: SisyphusPlugin[];
+let activationOrder: LoadedEntry[];
 try {
-  activationOrder = topoSortPlugins(loadedPlugins);
+  const sorted = topoSortPlugins(loadedEntries.map((e) => e.plugin));
+  // Re-attach packageName / uiBundlePath by plugin.manifest.id mapping.
+  const byId = new Map(loadedEntries.map((e) => [e.plugin.manifest.id, e]));
+  activationOrder = sorted
+    .map((p) => byId.get(p.manifest.id))
+    .filter((e): e is LoadedEntry => Boolean(e));
 } catch (err) {
   // eslint-disable-next-line no-console
   console.error(
     '[sisyphus-daemon] plugin dependency graph invalid, falling back to load order:',
     err instanceof Error ? err.message : err,
   );
-  activationOrder = loadedPlugins;
+  activationOrder = loadedEntries;
 }
 
-for (const plugin of activationOrder) {
+for (const entry of activationOrder) {
   try {
-    await activatePlugin(plugin);
+    await activatePlugin(entry.plugin, entry.packageName, entry.uiBundlePath);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(
-      `[sisyphus-daemon] failed to activate plugin "${plugin.manifest.id}":`,
+      `[sisyphus-daemon] failed to activate plugin "${entry.plugin.manifest.id}":`,
       err instanceof Error ? err.message : err,
     );
   }
@@ -269,6 +294,54 @@ api.get('/registry/views', (c) => {
 api.get('/registry/cards', (c) => c.json(registry.queryCards()));
 api.get('/registry/skills', (c) => c.json(registry.querySkills()));
 api.get('/registry/agents', (c) => c.json(registry.queryAgents()));
+
+// M16: list loaded plugins + serve their UI bundles for browser runtime
+// dynamic import. The UI calls /api/plugins on boot to know what to
+// `await import()`.
+api.get('/plugins', (c) => {
+  const records = registry.queryPluginRecords();
+  return c.json(
+    records.map((r) => ({
+      id: r.manifest.id,
+      packageName: r.packageName,
+      displayName: r.manifest.displayName,
+      version: r.manifest.version,
+      hasUiBundle: r.uiBundlePath !== null,
+      manifest: r.manifest,
+    })),
+  );
+});
+
+api.get('/plugins/:id/ui.mjs', async (c) => {
+  const id = c.req.param('id');
+  const record = registry.getPluginRecord(id);
+  if (!record) {
+    return c.json({ error: `unknown plugin: ${id}` }, 404);
+  }
+  if (!record.uiBundlePath) {
+    return c.json(
+      {
+        error: `plugin "${id}" declares no UI bundle or it isn't built yet`,
+      },
+      404,
+    );
+  }
+  const { promises: fs } = await import('node:fs');
+  try {
+    const content = await fs.readFile(record.uiBundlePath);
+    c.header('Content-Type', 'application/javascript; charset=utf-8');
+    // No caching so a `pnpm build` rebuild + refresh picks up immediately.
+    c.header('Cache-Control', 'no-store');
+    return c.body(content);
+  } catch (err) {
+    return c.json(
+      {
+        error: `failed to read UI bundle: ${err instanceof Error ? err.message : err}`,
+      },
+      500,
+    );
+  }
+});
 
 app.route('/api', api);
 

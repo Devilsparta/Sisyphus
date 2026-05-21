@@ -35,14 +35,22 @@ interface SkillEntry {
   handler: SkillHandler;
 }
 
+export interface PluginRecord {
+  manifest: PluginManifest;
+  packageName: string;
+  /** Absolute fs path of the UI bundle, or null if not built / not declared. */
+  uiBundlePath: string | null;
+}
+
 export class Registry implements RegistryAPI {
   private views = new Map<string, ViewDescriptor>();
   private cards = new Map<string, CardDescriptor>();
   private skills = new Map<string, SkillEntry>();
   private agents = new Map<string, AgentImpl>();
-  // plugin id → manifest, for ACL lookups (which skills can an agent
-  // owned by plugin X invoke?).
-  private manifests = new Map<string, PluginManifest>();
+  // plugin id → record (manifest + provenance), for ACL lookups (which
+  // skills can an agent owned by plugin X invoke?) and for HTTP discovery
+  // (which plugins are loaded, where are their UI bundles?).
+  private pluginRecords = new Map<string, PluginRecord>();
 
   registerView(view: ViewDescriptor): Disposable {
     if (this.views.has(view.id)) {
@@ -130,13 +138,26 @@ export class Registry implements RegistryAPI {
     return this.agents.get(id);
   }
 
-  /** Record a plugin's manifest so router can look up its requires.skills. */
-  registerPluginManifest(manifest: PluginManifest): void {
-    this.manifests.set(manifest.id, manifest);
+  /**
+   * Record a plugin's manifest + package provenance + UI bundle location
+   * so router (ACL) and HTTP routes (UI bundle serve, /api/plugins list)
+   * can look them up.
+   */
+  registerPluginRecord(record: PluginRecord): void {
+    this.pluginRecords.set(record.manifest.id, record);
   }
 
+  getPluginRecord(id: string): PluginRecord | undefined {
+    return this.pluginRecords.get(id);
+  }
+
+  queryPluginRecords(): PluginRecord[] {
+    return Array.from(this.pluginRecords.values());
+  }
+
+  /** Convenience: just the manifest (older callers / ACL). */
   getPluginManifest(id: string): PluginManifest | undefined {
-    return this.manifests.get(id);
+    return this.pluginRecords.get(id)?.manifest;
   }
 
   snapshot(): RegistrySnapshot {

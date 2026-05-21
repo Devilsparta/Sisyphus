@@ -7,7 +7,8 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./ui": "./src/ui/index.tsx"
+    "./ui": "./src/ui/index.tsx",
+    "./package.json": "./package.json"
   },
   "sisyphus": {
     "id": "plugin-base",
@@ -15,14 +16,21 @@
     "version": "0.1.0",
     "dependencies": [],
     "contributes": {
-      "agents": ["plugin-base.agent.react-designer"],
-      "views": ["plugin-base.view.chat", "plugin-base.view.canvas-preview"],
+      "agents": [
+        "plugin-base.agent.react-designer"
+      ],
+      "views": [
+        "plugin-base.view.chat",
+        "plugin-base.view.canvas-preview"
+      ],
       "cards": [],
       "skills": []
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:ui": "node build-ui.mjs",
+    "build": "pnpm build:ui"
   },
   "dependencies": {
     "@codesandbox/sandpack-react": "^2.20.0",
@@ -37,6 +45,7 @@
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18.3.0",
+    "esbuild": "^0.28.0",
     "react": "^18.3.1",
     "typescript": "^5"
   }

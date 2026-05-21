@@ -218,6 +218,18 @@ export interface PluginManifest {
   requires?: {
     skills?: string[];
   };
+  /**
+   * Path (relative to the plugin's package.json) of a browser-loadable
+   * ESM bundle exporting the plugin's UI surface (views, cardRenderers,
+   * providers). The daemon serves this file at
+   * GET /api/plugins/<id>/ui.mjs so the UI can `await import()` it at
+   * runtime — no static UI-side `import '@sisyphus/plugin-x/ui'`
+   * needed in production.
+   *
+   * Default: "./dist/ui.mjs" when unset.
+   * Plugins without a UI surface (daemon-only) can omit by setting "".
+   */
+  uiEntry?: string;
 }
 
 // ─── Plugin runtime entry (default export from plugin's main) ────────────────
