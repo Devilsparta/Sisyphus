@@ -36,6 +36,7 @@ import { createPluginStorage } from './storage';
 import { resolveEnabledPlugins, loadPlugin } from './plugin-loader';
 import { ScopedRegistry } from './scoped-registry';
 import { topoSortPlugins } from './plugin-graph';
+import { requireApiKey, isWSAuthorized } from './auth';
 
 // Load both .env and .env.local; the latter overrides and is the convention
 // for unchecked-in secrets (used here for OPENAI_API_KEY etc).
@@ -132,6 +133,7 @@ for (const plugin of activationOrder) {
 }
 
 const wsHub = createWSHub({
+  isAuthorized: isWSAuthorized,
   onConnection(send) {
     send(KernelEvents.PlatformReady, { startedAt });
     send(KernelEvents.RegistrySnapshot, registry.snapshot());
@@ -160,6 +162,9 @@ app.use('*', cors());
 app.get('/health', (c) => c.json({ ok: true, name: 'sisyphus-daemon' }));
 
 const api = new Hono();
+
+// API key auth on every /api/* route. /health stays open (mounted on `app`).
+api.use('*', requireApiKey);
 
 api.post('/chat', async (c) => {
   const { messages } = await c.req.json<ChatRequest>();

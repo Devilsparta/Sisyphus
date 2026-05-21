@@ -29,6 +29,11 @@ export interface WSHubOptions {
    * boot-time clients did.
    */
   onConnection?: (send: Sender) => void;
+  /**
+   * Per-request gate for the WS upgrade. Returning false rejects the upgrade
+   * with 401 before the handshake completes. M11 uses this for API key auth.
+   */
+  isAuthorized?: (req: IncomingMessage) => boolean;
 }
 
 export interface WSHub {
@@ -86,13 +91,26 @@ export function createWSHub(opts: WSHubOptions = {}): WSHub {
   return {
     attach(server: HTTPServer) {
       server.on('upgrade', (req: IncomingMessage, socket: Duplex, head) => {
-        if (req.url === WS_PATH) {
-          wss.handleUpgrade(req, socket, head, (ws) => {
-            wss.emit('connection', ws, req);
-          });
-        } else {
+        // Allow WS_PATH plus query string (?token=...) variants.
+        let pathname: string;
+        try {
+          pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+        } catch {
           socket.destroy();
+          return;
         }
+        if (pathname !== WS_PATH) {
+          socket.destroy();
+          return;
+        }
+        if (opts.isAuthorized && !opts.isAuthorized(req)) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit('connection', ws, req);
+        });
       });
     },
 
