@@ -37,11 +37,24 @@ import { resolveEnabledPlugins, loadPlugin } from './plugin-loader';
 import { ScopedRegistry } from './scoped-registry';
 import { topoSortPlugins } from './plugin-graph';
 import { requireApiKey, isWSAuthorized } from './auth';
+import {
+  reloadConfig,
+  getMergedConfig,
+  getWorkspace,
+  setWorkspace,
+  writeUserConfig,
+  writeProjectConfig,
+  maskConfigForResponse,
+  stripMaskedFields,
+  type SisyphusConfig,
+} from './config';
 
 // Load both .env and .env.local; the latter overrides and is the convention
-// for unchecked-in secrets (used here for OPENAI_API_KEY etc).
+// for unchecked-in secrets. After dotenv, layer ~/.sisyphus/config.json
+// (and project config when a workspace is later set) on top via reloadConfig.
 loadDotenv();
 loadDotenv({ path: '.env.local', override: true });
+await reloadConfig();
 
 const PORT = Number(process.env.SISYPHUS_DAEMON_PORT ?? 8787);
 
@@ -208,6 +221,42 @@ api.post('/chat', async (c) => {
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
     },
+  });
+});
+
+api.get('/config', (c) => c.json(maskConfigForResponse(getMergedConfig())));
+
+api.post('/config', async (c) => {
+  const body = await c.req.json<{
+    scope: 'user' | 'project';
+    config: SisyphusConfig;
+  }>();
+  const patch = stripMaskedFields(body.config);
+  try {
+    if (body.scope === 'project') {
+      await writeProjectConfig(patch);
+    } else {
+      await writeUserConfig(patch);
+    }
+    await reloadConfig();
+    return c.json({ ok: true, config: maskConfigForResponse(getMergedConfig()) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ ok: false, error: msg }, 400);
+  }
+});
+
+api.get('/workspace', (c) =>
+  c.json({ path: getWorkspace() }),
+);
+
+api.post('/workspace', async (c) => {
+  const { path: p } = await c.req.json<{ path: string | null }>();
+  await setWorkspace(p ?? null);
+  return c.json({
+    ok: true,
+    path: getWorkspace(),
+    config: maskConfigForResponse(getMergedConfig()),
   });
 });
 
