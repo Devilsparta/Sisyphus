@@ -27,6 +27,8 @@ export default defineConfig({
     },
   },
   build: {
+    // main.tsx uses top-level await for plugin loading; need ES2022 target.
+    target: 'es2022',
     // In production, externalize React so the importmap in index.html
     // resolves it to the same URL plugin bundles do. Host and plugins
     // share one React instance — vital because hooks identity has to

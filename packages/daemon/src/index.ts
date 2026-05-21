@@ -10,7 +10,10 @@
  *     disable at runtime, no daemon restart needed.
  */
 import type { Server as HTTPServer } from 'node:http';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { config as loadDotenv } from 'dotenv';
@@ -358,6 +361,35 @@ api.post('/plugins/disable', async (c) => {
 });
 
 app.route('/api', api);
+
+// Optional UI static serve. When SISYPHUS_UI_DIR points to a built UI
+// (`packages/ui/dist` in dev, /opt/sisyphus/ui in a docker image), daemon
+// becomes the single origin for /api, /ws, AND the SPA — the web-deploy
+// shape. Without it, the UI runs separately (e.g. `pnpm --filter ui dev`
+// through the Vite proxy).
+const UI_DIR = process.env.SISYPHUS_UI_DIR
+  ? path.resolve(process.env.SISYPHUS_UI_DIR)
+  : null;
+if (UI_DIR) {
+  try {
+    await fs.access(path.join(UI_DIR, 'index.html'));
+    // eslint-disable-next-line no-console
+    console.log(`[sisyphus-daemon] serving UI from ${UI_DIR}`);
+    // Serve hashed assets (index-*.js / *.css / favicon.ico ...) as files.
+    app.use('/*', serveStatic({ root: UI_DIR }));
+    // SPA fallback: anything not /api, /ws, /health, or a real file →
+    // index.html. Lets future client-side routing work.
+    app.get('*', async (c) => {
+      const content = await fs.readFile(path.join(UI_DIR, 'index.html'), 'utf-8');
+      return c.html(content);
+    });
+  } catch {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[sisyphus-daemon] SISYPHUS_UI_DIR=${UI_DIR} but index.html not found — not serving UI`,
+    );
+  }
+}
 
 const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
   // eslint-disable-next-line no-console

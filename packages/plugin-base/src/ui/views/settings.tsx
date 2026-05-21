@@ -18,6 +18,16 @@ interface WorkspaceResponse {
   path: string | null;
 }
 
+interface PluginInfo {
+  packageName: string;
+  enabled: boolean;
+  activated: boolean;
+  id: string | null;
+  displayName: string | null;
+  version: string | null;
+  hasUiBundle: boolean;
+}
+
 type LlmField = NonNullable<ConfigResponse['llm']>;
 
 const LLM_FIELDS: Array<{
@@ -45,16 +55,24 @@ export default function SettingsView() {
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Plugins state
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  const [installInput, setInstallInput] = useState('');
+  const [pluginBusy, setPluginBusy] = useState<string | null>(null);
+  const [pluginStatus, setPluginStatus] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     try {
-      const [wsRes, cfgRes] = await Promise.all([
+      const [wsRes, cfgRes, pluginsRes] = await Promise.all([
         fetch('/api/workspace').then((r) => r.json() as Promise<WorkspaceResponse>),
         fetch('/api/config').then((r) => r.json() as Promise<ConfigResponse>),
+        fetch('/api/plugins').then((r) => r.json() as Promise<PluginInfo[]>),
       ]);
       setWorkspace(wsRes.path);
       setWorkspaceInput(wsRes.path ?? '');
       setConfig(cfgRes);
       setEdits({});
+      setPlugins(pluginsRes);
     } catch (err) {
       setStatus(
         `Load failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -66,7 +84,6 @@ export default function SettingsView() {
     load();
   }, [load]);
 
-  // If user clears workspace, force scope back to "user".
   useEffect(() => {
     if (!workspace && scope === 'project') setScope('user');
   }, [workspace, scope]);
@@ -125,6 +142,48 @@ export default function SettingsView() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function pluginRequest(
+    url: string,
+    body: Record<string, unknown>,
+    busyKey: string,
+    successMsg: string,
+  ): Promise<void> {
+    setPluginBusy(busyKey);
+    setPluginStatus(null);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json()) as { ok: boolean; error?: string };
+      if (!json.ok) {
+        setPluginStatus(`${busyKey}: ${json.error ?? 'failed'}`);
+      } else {
+        setPluginStatus(successMsg);
+      }
+      await load();
+    } catch (err) {
+      setPluginStatus(
+        `${busyKey} failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setPluginBusy(null);
+    }
+  }
+
+  async function installPlugin(): Promise<void> {
+    const pkg = installInput.trim();
+    if (!pkg) return;
+    await pluginRequest(
+      '/api/plugins/install',
+      { packageName: pkg },
+      `install ${pkg}`,
+      `Installed ${pkg}`,
+    );
+    setInstallInput('');
   }
 
   return (
@@ -212,6 +271,121 @@ export default function SettingsView() {
         {status && (
           <p className="text-xs text-muted-foreground">{status}</p>
         )}
+
+        <section className="space-y-3 border-t border-border pt-6">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Plugins
+          </h3>
+
+          <div className="space-y-1">
+            <label className="block text-xs text-muted-foreground">
+              Install from npm
+            </label>
+            <div className="flex gap-2">
+              <Input
+                value={installInput}
+                onChange={(e) => setInstallInput(e.target.value)}
+                placeholder="@scope/plugin-name (optionally @version)"
+                disabled={pluginBusy !== null}
+              />
+              <Button
+                size="sm"
+                onClick={installPlugin}
+                disabled={pluginBusy !== null || !installInput.trim()}
+              >
+                {pluginBusy?.startsWith('install ') ? 'Installing…' : 'Install'}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Plugin tarball is downloaded into{' '}
+              <code className="font-mono">~/.sisyphus/plugins-node_modules</code>
+              {' '}and activated immediately. No daemon restart.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            {plugins.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No plugins installed yet.
+              </p>
+            ) : (
+              plugins.map((p) => {
+                const key = p.packageName;
+                const busyOnThis = pluginBusy?.includes(key);
+                return (
+                  <div
+                    key={key}
+                    className="space-y-1 rounded border border-border p-2"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">
+                          {p.displayName ?? p.packageName}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {p.packageName}
+                          {p.version && (
+                            <span className="ml-2">v{p.version}</span>
+                          )}
+                          {p.activated && (
+                            <span className="ml-2 text-foreground">
+                              · active
+                            </span>
+                          )}
+                          {p.enabled && !p.activated && (
+                            <span className="ml-2 text-destructive">
+                              · enabled, not activated
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <Button
+                          size="sm"
+                          variant={p.enabled ? 'secondary' : 'outline'}
+                          disabled={busyOnThis}
+                          onClick={() =>
+                            pluginRequest(
+                              p.enabled
+                                ? '/api/plugins/disable'
+                                : '/api/plugins/enable',
+                              { packageName: key },
+                              `${p.enabled ? 'disable' : 'enable'} ${key}`,
+                              p.enabled
+                                ? `Disabled ${key}`
+                                : `Enabled ${key}`,
+                            )
+                          }
+                        >
+                          {p.enabled ? 'Disable' : 'Enable'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busyOnThis}
+                          onClick={() =>
+                            pluginRequest(
+                              '/api/plugins/uninstall',
+                              { packageName: key },
+                              `uninstall ${key}`,
+                              `Uninstalled ${key}`,
+                            )
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {pluginStatus && (
+            <p className="text-xs text-muted-foreground">{pluginStatus}</p>
+          )}
+        </section>
       </div>
     </div>
   );
