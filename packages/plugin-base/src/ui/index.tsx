@@ -9,6 +9,7 @@ import type { ComponentType, ReactNode } from 'react';
 import type { CardDescriptor, ViewDescriptor } from '@sisyphus/kernel';
 import ChatPanel from './views/chat-panel';
 import CanvasPreview from './views/canvas-preview';
+import SettingsView from './views/settings';
 import { WorkspaceProvider } from './workspace-state';
 
 type Provider = ComponentType<{ children: ReactNode }>;
@@ -43,6 +44,16 @@ export const views: UIViewRegistration[] = [
       defaultVisible: true,
     },
     Component: CanvasPreview,
+  },
+  {
+    descriptor: {
+      id: 'plugin-base.view.settings',
+      region: 'side',
+      title: 'Settings',
+      icon: 'settings',
+      defaultVisible: false,
+    },
+    Component: SettingsView,
   },
 ];
 

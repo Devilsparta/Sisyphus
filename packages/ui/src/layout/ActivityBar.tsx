@@ -3,6 +3,7 @@ import {
   Eye,
   Layers,
   ListTodo,
+  Settings,
   type LucideIcon,
 } from 'lucide-react';
 import { listViews } from '@sisyphus/kernel/ui';
@@ -20,6 +21,7 @@ const iconMap: Record<string, LucideIcon> = {
   eye: Eye,
   layers: Layers,
   'list-todo': ListTodo,
+  settings: Settings,
 };
 
 export default function ActivityBar({
