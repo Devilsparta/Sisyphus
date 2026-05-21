@@ -95,29 +95,48 @@ export interface AgentDescriptor {
    * router.
    */
   triggerKeywords?: string[];
+  /**
+   * Tie-breaker / fan-out ordering signal (M14).
+   * Higher = preferred. When the router fan-outs across multiple agents
+   * (or chooses among tied candidates), it picks by descending priority.
+   * Default 0 when omitted.
+   */
+  priority?: number;
 }
 
 /**
  * Streaming events an agent emits during a run. They pass-through the daemon
  * to the UI without router interpretation; the router only observes `done`
  * for completion / retry decisions.
+ *
+ * `source` is injected by the router at emit time (agents shouldn't set it
+ * themselves); it identifies which agent produced the event. Vital for
+ * fan-out / spawnAgent traces so the UI can route events to the right cell.
  */
+interface EventBase {
+  source?: string;
+}
 export type AgentEvent =
-  | { type: 'token'; text: string }
-  | { type: 'reasoning'; text: string }
-  | { type: 'card'; card: CardInstance }
-  | {
+  | (EventBase & { type: 'token'; text: string })
+  | (EventBase & { type: 'reasoning'; text: string })
+  | (EventBase & { type: 'card'; card: CardInstance })
+  | (EventBase & {
       type: 'tool_call';
       id: string;
       skill: string;
       args: Record<string, unknown>;
-    }
-  | { type: 'tool_result'; id: string; result?: unknown; error?: string }
-  | {
+    })
+  | (EventBase & {
+      type: 'tool_result';
+      id: string;
+      result?: unknown;
+      error?: string;
+    })
+  | (EventBase & {
       type: 'done';
       reason: 'stop' | 'error' | 'cancelled';
       error?: string;
-    };
+    });
 
 /**
  * Context passed to an agent's `run`. The `emit` callback funnels events back
@@ -147,6 +166,16 @@ export interface AgentRunContext {
    * keep its own name→id map when dispatching the LLM's tool_calls.
    */
   querySkills: () => SkillDescriptor[];
+  /**
+   * Spawn another agent as a sub-task (M14). The sub-agent's events stream
+   * through to the UI tagged with the sub-agent's id as `source`. Awaits
+   * the sub-agent to completion; its `done` is forwarded but does NOT end
+   * the parent's run — the parent must still emit its own `done`.
+   *
+   * The same skill-ACL applies to the sub-agent (it can only invoke its
+   * own plugin's skills + whatever its manifest declares).
+   */
+  spawnAgent: (agentId: string, userMessage: string) => Promise<void>;
 }
 
 /**
