@@ -16,12 +16,6 @@ importers:
       '@sisyphus/kernel':
         specifier: workspace:*
         version: link:../kernel
-      '@sisyphus/plugin-base':
-        specifier: workspace:*
-        version: link:../plugin-base
-      '@sisyphus/plugin-todo':
-        specifier: workspace:*
-        version: link:../plugin-todo
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
@@ -35,6 +29,12 @@ importers:
         specifier: ^8.20.1
         version: 8.20.1
     devDependencies:
+      '@sisyphus/plugin-base':
+        specifier: workspace:*
+        version: link:../plugin-base
+      '@sisyphus/plugin-todo':
+        specifier: workspace:*
+        version: link:../plugin-todo
       '@types/node':
         specifier: ^20
         version: 20.0.0
@@ -118,12 +118,6 @@ importers:
       '@sisyphus/kernel':
         specifier: workspace:*
         version: link:../kernel
-      '@sisyphus/plugin-base':
-        specifier: workspace:*
-        version: link:../plugin-base
-      '@sisyphus/plugin-todo':
-        specifier: workspace:*
-        version: link:../plugin-todo
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
