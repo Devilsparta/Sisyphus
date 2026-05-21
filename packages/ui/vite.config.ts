@@ -26,4 +26,13 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // In production, externalize React so the importmap in index.html
+    // resolves it to the same URL plugin bundles do. Host and plugins
+    // share one React instance — vital because hooks identity has to
+    // cross module boundaries.
+    rollupOptions: {
+      external: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime'],
+    },
+  },
 });

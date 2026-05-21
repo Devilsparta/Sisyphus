@@ -5,6 +5,31 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sisyphus</title>
+    <!--
+      Importmap (M16): plugin UI bundles (esbuild-built, served by daemon
+      at /api/plugins/<id>/ui.mjs) externalize react / react-dom etc.
+      Browser resolves their `import 'react'` through this map.
+
+      In Vite dev mode this is inert — Vite's own dev server resolves
+      `react` via its module graph for the host. Plugin static imports
+      go through the same graph, so dev-mode hosts and plugins still
+      share a single React instance.
+
+      Production-only path: when the host UI is built (vite build) with
+      react externalized, host + plugin bundles both honor this map and
+      share React via esm.sh. Switch to a pinned private mirror for
+      offline / enterprise deploys.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.3.1",
+          "react-dom": "https://esm.sh/react-dom@18.3.1",
+          "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+          "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime"
+        }
+      }
+    </script>
   </head>
   <body class="antialiased">
     <div id="root"></div>
