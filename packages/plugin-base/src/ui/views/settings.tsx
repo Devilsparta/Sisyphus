@@ -28,6 +28,20 @@ interface PluginInfo {
   hasUiBundle: boolean;
 }
 
+interface PluginEntry {
+  packageName: string;
+  version: string;
+  displayName?: string;
+  description?: string;
+  author?: string;
+  homepage?: string;
+  tags?: string[];
+  iconUrl?: string;
+  score?: number;
+  featured?: boolean;
+  source: 'npm' | 'marketplace';
+}
+
 type LlmField = NonNullable<ConfigResponse['llm']>;
 
 const LLM_FIELDS: Array<{
@@ -57,28 +71,65 @@ export default function SettingsView() {
 
   // Plugins state
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
-  const [installInput, setInstallInput] = useState('');
   const [pluginBusy, setPluginBusy] = useState<string | null>(null);
   const [pluginStatus, setPluginStatus] = useState<string | null>(null);
 
+  // Marketplace browse / search
+  const [marketplace, setMarketplace] = useState<PluginEntry[]>([]);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchResults, setSearchResults] = useState<PluginEntry[] | null>(null);
+  const [searching, setSearching] = useState(false);
+
   const load = useCallback(async () => {
     try {
-      const [wsRes, cfgRes, pluginsRes] = await Promise.all([
+      const [wsRes, cfgRes, pluginsRes, marketRes] = await Promise.all([
         fetch('/api/workspace').then((r) => r.json() as Promise<WorkspaceResponse>),
         fetch('/api/config').then((r) => r.json() as Promise<ConfigResponse>),
         fetch('/api/plugins').then((r) => r.json() as Promise<PluginInfo[]>),
+        fetch('/api/plugins/marketplace')
+          .then((r) => r.json() as Promise<{ entries: PluginEntry[] }>)
+          .catch(() => ({ entries: [] })),
       ]);
       setWorkspace(wsRes.path);
       setWorkspaceInput(wsRes.path ?? '');
       setConfig(cfgRes);
       setEdits({});
       setPlugins(pluginsRes);
+      setMarketplace(marketRes.entries);
     } catch (err) {
       setStatus(
         `Load failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }, []);
+
+  // Debounced npm search.
+  useEffect(() => {
+    const q = searchInput.trim();
+    if (!q) {
+      setSearchResults(null);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/plugins/search?q=${encodeURIComponent(q)}`,
+        );
+        const json = (await res.json()) as { entries: PluginEntry[] };
+        if (!cancelled) setSearchResults(json.entries);
+      } catch {
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [searchInput]);
 
   useEffect(() => {
     load();
@@ -174,17 +225,18 @@ export default function SettingsView() {
     }
   }
 
-  async function installPlugin(): Promise<void> {
-    const pkg = installInput.trim();
-    if (!pkg) return;
+  async function installByPackageName(packageName: string): Promise<void> {
     await pluginRequest(
       '/api/plugins/install',
-      { packageName: pkg },
-      `install ${pkg}`,
-      `Installed ${pkg}`,
+      { packageName },
+      `install ${packageName}`,
+      `Installed ${packageName}`,
     );
-    setInstallInput('');
   }
+
+  const installedSet = new Set(plugins.map((p) => p.packageName));
+  const browseList: PluginEntry[] =
+    searchResults !== null ? searchResults : marketplace;
 
   return (
     <div className="flex h-full flex-col">
@@ -274,39 +326,13 @@ export default function SettingsView() {
 
         <section className="space-y-3 border-t border-border pt-6">
           <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Plugins
+            Installed plugins
           </h3>
-
-          <div className="space-y-1">
-            <label className="block text-xs text-muted-foreground">
-              Install from npm
-            </label>
-            <div className="flex gap-2">
-              <Input
-                value={installInput}
-                onChange={(e) => setInstallInput(e.target.value)}
-                placeholder="@scope/plugin-name (optionally @version)"
-                disabled={pluginBusy !== null}
-              />
-              <Button
-                size="sm"
-                onClick={installPlugin}
-                disabled={pluginBusy !== null || !installInput.trim()}
-              >
-                {pluginBusy?.startsWith('install ') ? 'Installing…' : 'Install'}
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Plugin tarball is downloaded into{' '}
-              <code className="font-mono">~/.sisyphus/plugins-node_modules</code>
-              {' '}and activated immediately. No daemon restart.
-            </p>
-          </div>
 
           <div className="space-y-2">
             {plugins.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                No plugins installed yet.
+                No plugins installed yet. Pick one below.
               </p>
             ) : (
               plugins.map((p) => {
@@ -385,6 +411,94 @@ export default function SettingsView() {
           {pluginStatus && (
             <p className="text-xs text-muted-foreground">{pluginStatus}</p>
           )}
+        </section>
+
+        <section className="space-y-3 border-t border-border pt-6">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Browse plugins
+          </h3>
+
+          <Input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search npm for sisyphus-plugin… (empty = show featured)"
+          />
+          <p className="text-xs text-muted-foreground">
+            {searchResults === null
+              ? `Featured (${marketplace.length}) — curated by the Sisyphus team`
+              : searching
+                ? 'Searching npm…'
+                : `npm search results (${searchResults.length})`}
+          </p>
+
+          <div className="space-y-2">
+            {browseList.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {searchResults === null
+                  ? 'Marketplace is empty or unreachable.'
+                  : 'No plugins found matching that query.'}
+              </p>
+            ) : (
+              browseList.map((entry) => {
+                const installed = installedSet.has(entry.packageName);
+                const busyOnThis = pluginBusy?.includes(entry.packageName);
+                return (
+                  <div
+                    key={`${entry.source}:${entry.packageName}`}
+                    className="space-y-1 rounded border border-border p-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium">
+                            {entry.displayName ?? entry.packageName}
+                          </span>
+                          {entry.featured && (
+                            <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                              featured
+                            </span>
+                          )}
+                          {entry.source === 'npm' && (
+                            <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                              npm
+                            </span>
+                          )}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {entry.packageName} v{entry.version}
+                          {entry.author && (
+                            <span className="ml-2">· {entry.author}</span>
+                          )}
+                          {typeof entry.score === 'number' && (
+                            <span className="ml-2">
+                              · score {entry.score.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        {entry.description && (
+                          <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                            {entry.description}
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant={installed ? 'ghost' : 'default'}
+                        disabled={installed || busyOnThis}
+                        onClick={() => installByPackageName(entry.packageName)}
+                      >
+                        {installed
+                          ? 'Installed'
+                          : busyOnThis
+                            ? 'Installing…'
+                            : 'Install'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </section>
       </div>
     </div>

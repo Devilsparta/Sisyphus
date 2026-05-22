@@ -1,0 +1,25 @@
+{
+  "$schema": "https://github.com/Devilsparta/Sisyphus/blob/main/docs/marketplace.schema.json",
+  "version": 1,
+  "featured": [
+    {
+      "packageName": "@sisyphus/plugin-base",
+      "displayName": "Base Plugin",
+      "description": "Reference plugin shipped by the Sisyphus team. Provides the Chat view, Canvas preview (Sandpack), Settings panel, and three demo agents (react-designer, time-helper, assistant). Recommended first install for any fresh Sisyphus.",
+      "version": "0.1.0",
+      "author": "Sisyphus",
+      "homepage": "https://github.com/Devilsparta/Sisyphus/tree/main/packages/plugin-base",
+      "tags": ["official", "reference", "react", "ai"]
+    },
+    {
+      "packageName": "@sisyphus/plugin-todo",
+      "displayName": "Todo Manager",
+      "description": "Rule-based todo manager with persistence. Demonstrates a non-LLM agent, custom card payloads, and the side-pane view extension surface. Good template if you want to build a deterministic agent that owns a small piece of UI state.",
+      "version": "0.1.0",
+      "author": "Sisyphus",
+      "homepage": "https://github.com/Devilsparta/Sisyphus/tree/main/packages/plugin-todo",
+      "tags": ["official", "reference", "rule-based"]
+    }
+  ],
+  "catalog": []
+}

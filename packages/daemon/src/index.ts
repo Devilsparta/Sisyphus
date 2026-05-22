@@ -54,6 +54,7 @@ import {
   ensurePluginsRoot,
 } from './plugin-installer';
 import { PluginManager } from './plugin-manager';
+import { searchNpm, fetchMarketplace } from './plugin-search';
 
 // Load both .env and .env.local; then layer ~/.sisyphus/config.json over.
 loadDotenv();
@@ -269,6 +270,20 @@ api.get('/plugins/:id/ui.mjs', async (c) => {
       500,
     );
   }
+});
+
+api.get('/plugins/search', async (c) => {
+  const q = c.req.query('q') ?? '';
+  const sizeRaw = c.req.query('size');
+  const size = sizeRaw ? Math.min(Math.max(1, Number(sizeRaw)), 50) : 20;
+  const entries = await searchNpm(q, size);
+  return c.json({ entries });
+});
+
+api.get('/plugins/marketplace', async (c) => {
+  const force = c.req.query('refresh') === '1';
+  const entries = await fetchMarketplace(force);
+  return c.json({ entries });
 });
 
 api.post('/plugins/install', async (c) => {
