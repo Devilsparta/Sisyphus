@@ -75,7 +75,8 @@ Config: `packages/daemon/.env.local` (OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MO
 | M19 | Runtime plugin install/enable/disable/uninstall | 05-22 |
 | M20+M21 | Plugins management UI + web deploy (daemon serves UI) | 05-22 |
 | M23 | Plugin discovery (npm search + curated marketplace) | 05-23 |
-| M22 | Tauri desktop shell phase-1 | 05-23 |
+| M22.1 | Tauri desktop shell phase-1 (spawn daemon via pnpm) | 05-23 |
+| M22.2 | Tauri sidecar — bun-compiled daemon binary as externalBin | 05-23 |
 
 ## Key files to know
 
@@ -124,7 +125,8 @@ Config path: `~/.sisyphus/plugins.config.json`
 ## What just happened (most recent work)
 
 **Today (2026-05-23):**
-- M22: Added Tauri v2 desktop shell. Rust binary that spawns the daemon as a child process, polls `/health`, then reloads the webview. On close, kills the daemon.
+- M22.1: Added Tauri v2 desktop shell. Rust binary that spawns the daemon as a child process, polls `/health`, then reloads the webview. On close, kills the daemon.
+- M22.2: Bundled the daemon as a Tauri sidecar. `pnpm --filter @sisyphus/daemon build:bin` runs `bun build --compile` to produce `src-tauri/binaries/sisyphus-daemon-<triple>` (68 MB). `tauri.conf.json` lists it as `externalBin`; `lib.rs` resolves it from `current_exe` sibling (prod / `cargo tauri dev` copy) or `src-tauri/binaries/` (fresh build) and falls back to `pnpm dev` so a clean clone still boots.
 - M23: Plugin discovery — daemon can search npm registry for `keywords:sisyphus-plugin` packages, and serves a curated marketplace from GitHub `marketplace.json`
 
 **Yesterday (2026-05-22):**
@@ -139,7 +141,7 @@ Config path: `~/.sisyphus/plugins.config.json`
 
 ## What's next (TODO)
 
-1. **M22 Phase-2**: Bundle daemon as Tauri sidecar binary → no need for Node/pnpm on user's machine for .app/.dmg distribution
+1. **M22 Phase-2.5**: Bundle the built UI inside the .app so the daemon can serve `index.html` without needing the monorepo on disk. Today the sidecar runs standalone but the prod bundle still relies on `packages/ui/dist` via `SISYPHUS_UI_DIR`.
 2. **Plugin storage upgrade**: SQLite or LevelDB instead of JSON files
 3. **UI auth flow**: Production auth for non-dev users (login/OAuth)
 4. **Cross-plugin visibility**: Should plugins see each other's data?
