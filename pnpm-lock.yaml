@@ -45,6 +45,9 @@ importers:
       '@sisyphus/plugin-base':
         specifier: workspace:*
         version: link:../plugin-base
+      '@sisyphus/plugin-hello':
+        specifier: workspace:*
+        version: link:../plugin-hello
       '@sisyphus/plugin-todo':
         specifier: workspace:*
         version: link:../plugin-todo
@@ -103,6 +106,19 @@ importers:
       react:
         specifier: ^18.3.1
         version: 18.3.1
+      typescript:
+        specifier: ^5
+        version: 5.0.2
+
+  packages/plugin-hello:
+    dependencies:
+      '@sisyphus/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.0.0
       typescript:
         specifier: ^5
         version: 5.0.2

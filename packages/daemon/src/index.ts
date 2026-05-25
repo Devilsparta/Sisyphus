@@ -54,12 +54,24 @@ import {
   ensurePluginsRoot,
 } from './plugin-installer';
 import { PluginManager } from './plugin-manager';
+import { PluginBroker, type PluginChildSpawner } from './plugin-broker';
+import { spawn } from 'node:child_process';
 import { searchNpm, fetchMarketplace } from './plugin-search';
 
 // Wrapped in an async IIFE so the bundled output has no top-level await.
 // Node SEA's ESM main support is brittle (Node 24 still loads .mjs blobs as
 // CJS in practice), so the build pipeline emits CJS — and CJS forbids TLA.
 async function main() {
+
+// M24: a single SEA binary plays two roles. When spawned with
+// `SISYPHUS_MODE=plugin-host`, we re-enter as a plugin's child process: load
+// the plugin entry and start the stdio JSON-RPC loop instead of the daemon
+// HTTP server.
+if (process.env.SISYPHUS_MODE === 'plugin-host') {
+  const { runPluginHost } = await import('./plugin-host-runtime');
+  await runPluginHost();
+  return;
+}
 
 // Load both .env and .env.local; then layer ~/.sisyphus/config.json over.
 loadDotenv();
@@ -71,7 +83,33 @@ const PORT = Number(process.env.SISYPHUS_DAEMON_PORT ?? 8787);
 
 const registry = new Registry();
 const router = new Router(registry);
-const pluginManager = new PluginManager(registry);
+
+// M24: plugins run as child processes. The broker handles spawning,
+// stdio JSON-RPC, and lifecycle. We pick a spawner that matches how
+// this daemon itself was launched:
+//   - SEA binary (prod): self-spawn with empty argv, dispatch via
+//     SISYPHUS_MODE=plugin-host inside main().
+//   - tsx dev: re-launch the same .ts entry via `node --import tsx`
+//     so the child can resolve TypeScript plugin sources too.
+const pluginChildSpawner: PluginChildSpawner = (env) => {
+  const inDevTsx =
+    typeof process.argv[1] === 'string' &&
+    process.argv[1] !== '' &&
+    process.argv[1] !== '/';
+  if (inDevTsx) {
+    return spawn(
+      process.execPath,
+      ['--import', 'tsx', process.argv[1]],
+      { env, stdio: ['pipe', 'pipe', 'inherit'] },
+    );
+  }
+  return spawn(process.execPath, [], {
+    env,
+    stdio: ['pipe', 'pipe', 'inherit'],
+  });
+};
+const broker = new PluginBroker(pluginChildSpawner);
+const pluginManager = new PluginManager(registry, broker);
 const startedAt = Date.now();
 
 // Boot: read persisted plugin config, activate everything in `enabled`.

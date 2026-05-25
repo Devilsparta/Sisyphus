@@ -1,90 +1,118 @@
 /**
- * Plugin lifecycle manager.
+ * Plugin lifecycle manager (M24 — broker-backed).
  *
- * Holds the runtime side of "what is currently activated":
- *   - activate(packageName): load module, build PluginContext, register
- *     declared agents + skills via a ScopedRegistry, call onActivate.
- *     Records the resulting disposers so deactivate() can revoke them.
- *   - deactivate(packageName): dispose all registrations + call
- *     onDeactivate. Plugin module stays in the ESM cache (Node can't
- *     unload), but its contributions vanish from the registry.
- *   - re-activate of same package: cached module is reused; the
- *     plugin's onActivate runs again — plugin authors should make it
- *     idempotent (state init reads from ctx.storage, not module
- *     top-level).
+ * Plugins now run as child processes. This file:
+ *   - delegates spawn / activate / deactivate / RPC to PluginBroker,
+ *   - takes the ContributionsSnapshot the plugin reports and registers it
+ *     into the central daemon-side Registry, with skill handlers and agent
+ *     impls implemented as RPC proxies (handler invocations bounce through
+ *     the broker into the plugin child),
+ *   - hosts the cross-plugin skill invoker the broker uses when one plugin
+ *     calls `host.invokeSkill` — this is where the M13 ACL lives.
+ *
+ * The public surface (isActivated / activate / deactivate / listActivated)
+ * mirrors the in-process M9..M23 manager so daemon index.ts and the
+ * /api/plugins/* routes don't have to know they're talking to subprocesses.
  */
 import type {
+  AgentImpl,
   Disposable,
-  PluginContext,
-  SisyphusPlugin,
+  PluginManifest,
+  SkillHandler,
 } from '@sisyphus/kernel';
 import type { Registry } from './registry';
 import { ScopedRegistry } from './scoped-registry';
-import { createPluginStorage } from './storage';
-import { loadPlugin, type LoadedPlugin } from './plugin-loader';
+import type { PluginBroker } from './plugin-broker';
 
-interface ActivatedPlugin {
+const ERR_ACL_DENIED = -32030;
+
+interface ActivatedRecord {
   packageName: string;
-  loaded: LoadedPlugin;
+  manifest: PluginManifest;
+  uiBundlePath: string | null;
   disposers: Disposable[];
 }
 
 export class PluginManager {
-  private activated = new Map<string, ActivatedPlugin>();
+  private activated = new Map<string, ActivatedRecord>();
 
-  constructor(private registry: Registry) {}
+  constructor(
+    private registry: Registry,
+    private broker: PluginBroker,
+  ) {
+    broker.setCrossPluginSkillInvoker(
+      (skillId, args, conversationId, callerPluginId) =>
+        this.invokeCrossPluginSkill(
+          skillId,
+          args,
+          conversationId,
+          callerPluginId,
+        ),
+    );
+  }
 
   isActivated(packageName: string): boolean {
     return this.activated.has(packageName);
   }
 
-  listActivated(): ActivatedPlugin[] {
+  listActivated(): ActivatedRecord[] {
     return Array.from(this.activated.values());
   }
 
-  async activate(packageName: string): Promise<LoadedPlugin> {
+  async activate(packageName: string): Promise<ActivatedRecord> {
     if (this.activated.has(packageName)) {
-      return this.activated.get(packageName)!.loaded;
+      return this.activated.get(packageName)!;
     }
 
-    const loaded = await loadPlugin(packageName);
-    const { plugin } = loaded;
+    const result = await this.broker.activate(packageName);
+    const { manifest, uiBundlePath } = result;
 
-    // Manifest first so ACL lookups during onActivate see it, and UI
-    // bundle endpoint resolves the path immediately.
+    // Manifest first so any cross-plugin ACL lookup during this activation
+    // sees it. UI bundle endpoint also uses pluginRecords to resolve the
+    // file path.
     this.registry.registerPluginRecord({
-      manifest: plugin.manifest,
+      manifest,
       packageName,
-      uiBundlePath: loaded.uiBundlePath,
+      uiBundlePath,
     });
 
-    const scoped = new ScopedRegistry(this.registry, plugin.manifest.id);
-    const ctx: PluginContext = {
-      registry: scoped,
-      storage: createPluginStorage(plugin.manifest.id),
-      log: (level, msg, meta) => {
-        // eslint-disable-next-line no-console
-        console.log(`[plugin:${plugin.manifest.id}][${level}] ${msg}`, meta ?? '');
-      },
-    };
-
+    const scoped = new ScopedRegistry(this.registry, manifest.id);
     const disposers: Disposable[] = [];
 
     try {
-      await plugin.onActivate?.(ctx);
-
-      for (const agent of plugin.agents ?? []) {
-        disposers.push(scoped.registerAgent(agent));
+      for (const skill of result.skills) {
+        const proxy: SkillHandler = async (args, ctx) =>
+          this.broker.invokeSkill(
+            packageName,
+            skill.id,
+            args,
+            ctx.conversationId,
+          );
+        disposers.push(scoped.registerSkill(skill, proxy));
       }
-      const skillDescs = plugin.manifest.contributes?.skills ?? [];
-      for (const desc of skillDescs) {
-        const handler = plugin.skillHandlers?.[desc.id];
-        if (handler) {
-          disposers.push(scoped.registerSkill(desc, handler));
-        }
+
+      for (const agentDesc of result.agents) {
+        const impl: AgentImpl = {
+          descriptor: agentDesc,
+          run: async (userMessage, runCtx) =>
+            this.broker.invokeAgent(
+              packageName,
+              agentDesc.id,
+              runCtx,
+              userMessage,
+            ),
+        };
+        disposers.push(scoped.registerAgent(impl));
+      }
+
+      for (const view of result.views) {
+        disposers.push(scoped.registerView(view));
+      }
+
+      for (const card of result.cards) {
+        disposers.push(scoped.registerCard(card));
       }
     } catch (err) {
-      // Activation failed mid-way — roll back whatever did register.
       for (const d of disposers) {
         try {
           d.dispose();
@@ -92,22 +120,30 @@ export class PluginManager {
           /* ignore */
         }
       }
+      await this.broker.deactivate(packageName);
       throw err;
     }
 
-    this.activated.set(packageName, { packageName, loaded, disposers });
+    const record: ActivatedRecord = {
+      packageName,
+      manifest,
+      uiBundlePath,
+      disposers,
+    };
+    this.activated.set(packageName, record);
 
     // eslint-disable-next-line no-console
     console.log(
-      `[plugin-manager] activated "${plugin.manifest.id}" (${packageName})`,
+      `[plugin-manager] activated "${manifest.id}" (${packageName})`,
       {
-        agents: (plugin.agents ?? []).map((a) => a.descriptor.id),
-        skills: Object.keys(plugin.skillHandlers ?? {}),
-        hasUI: loaded.uiBundlePath !== null,
+        agents: result.agents.map((a) => a.id),
+        skills: result.skills.map((s) => s.id),
+        views: result.views.map((v) => v.id),
+        hasUI: uiBundlePath !== null,
       },
     );
 
-    return loaded;
+    return record;
   }
 
   async deactivate(packageName: string): Promise<void> {
@@ -125,31 +161,40 @@ export class PluginManager {
         );
       }
     }
-    entry.disposers.length = 0;
-
-    try {
-      await entry.loaded.plugin.onDeactivate?.({
-        registry: new ScopedRegistry(this.registry, entry.loaded.plugin.manifest.id),
-        storage: createPluginStorage(entry.loaded.plugin.manifest.id),
-        log: (level, msg, meta) => {
-          // eslint-disable-next-line no-console
-          console.log(
-            `[plugin:${entry.loaded.plugin.manifest.id}][${level}] ${msg}`,
-            meta ?? '',
-          );
-        },
-      });
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[plugin-manager] onDeactivate for "${packageName}" threw:`,
-        err,
-      );
-    }
-
     this.activated.delete(packageName);
+
+    await this.broker.deactivate(packageName);
 
     // eslint-disable-next-line no-console
     console.log(`[plugin-manager] deactivated "${packageName}"`);
+  }
+
+  /**
+   * Broker's cross-plugin skill bridge. When a plugin's child process calls
+   * `host.invokeSkill` (typically from an agent's `ctx.invokeSkill`), this
+   * is what runs. M13 ACL lives here — same canInvokeSkill rule as the
+   * router: skill in caller's namespace = OK, otherwise must be declared
+   * in caller's `manifest.requires.skills`.
+   */
+  private async invokeCrossPluginSkill(
+    skillId: string,
+    args: Record<string, unknown>,
+    conversationId: string,
+    callerPluginId: string,
+  ): Promise<unknown> {
+    if (!skillId.startsWith(`${callerPluginId}.`)) {
+      const callerManifest = this.registry.getPluginManifest(callerPluginId);
+      const required = callerManifest?.requires?.skills ?? [];
+      if (!required.includes(skillId)) {
+        throw Object.assign(
+          new Error(
+            `Plugin "${callerPluginId}" is not allowed to invoke skill "${skillId}". ` +
+              `Add it to manifest.requires.skills.`,
+          ),
+          { code: ERR_ACL_DENIED },
+        );
+      }
+    }
+    return this.registry.invokeSkill(skillId, args, conversationId);
   }
 }

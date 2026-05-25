@@ -11,7 +11,7 @@
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import type { SisyphusPlugin } from '@sisyphus/kernel';
 import { pluginInstallDir } from './plugin-installer';
@@ -66,13 +66,19 @@ async function resolvePackage(pkgName: string): Promise<ResolvedPackage> {
   }
 
   // 2. Fallback: daemon's own node_modules (monorepo workspace symlink).
+  // Resolve through to an absolute path so the broker can pass it to a
+  // child process — bare specifiers don't work as spawn args.
   try {
     const pkgJsonPath = requireFromHere.resolve(`${pkgName}/package.json`);
     const root = path.dirname(pkgJsonPath);
+    const pkg = JSON.parse(await fs.readFile(pkgJsonPath, 'utf-8')) as {
+      main?: string;
+      exports?: unknown;
+    };
+    const main = resolveDaemonEntry(pkg, root);
     return {
       packageRoot: root,
-      // Let Node resolve through the bare specifier (exports field etc).
-      daemonEntrySpec: pkgName,
+      daemonEntrySpec: pathToFileURL(main).href,
     };
   } catch (err) {
     throw new Error(
@@ -107,6 +113,43 @@ function resolveDaemonEntry(
   }
   if (pkg.main) return path.resolve(root, pkg.main);
   return path.resolve(root, 'index.js');
+}
+
+/**
+ * M24: path-only resolution for the plugin broker. Returns absolute
+ * filesystem paths the broker can pass to a child process via
+ * SISYPHUS_PLUGIN_ENTRY without ever loading the plugin in this process.
+ *
+ * Unlike `loadPlugin`, this does NOT import the entry — pure path math.
+ */
+export interface ResolvedPluginPaths {
+  packageName: string;
+  packageRoot: string;
+  daemonEntryPath: string;
+  uiBundlePath: string | null;
+}
+
+export async function resolvePluginPaths(
+  pkgName: string,
+): Promise<ResolvedPluginPaths> {
+  const resolved = await resolvePackage(pkgName);
+  const daemonEntryPath = fileURLToPath(resolved.daemonEntrySpec);
+
+  // We don't know the manifest's uiEntry without loading the module, so
+  // probe the default './dist/ui.mjs' location. Plugins with a custom
+  // uiEntry will need to declare it in the package.json sisyphus field if
+  // they want the broker to pick it up — TODO M24.x: read uiEntry from
+  // package.json's "sisyphus" block (it already lives there for the
+  // marketplace) without doing a full module load.
+  const uiCandidate = path.resolve(resolved.packageRoot, DEFAULT_UI_ENTRY);
+  const uiBundlePath = (await fileExists(uiCandidate)) ? uiCandidate : null;
+
+  return {
+    packageName: pkgName,
+    packageRoot: resolved.packageRoot,
+    daemonEntryPath,
+    uiBundlePath,
+  };
 }
 
 export async function loadPlugin(pkgName: string): Promise<LoadedPlugin> {

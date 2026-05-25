@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@sisyphus/plugin-base": "workspace:*",
+    "@sisyphus/plugin-hello": "workspace:*",
     "@sisyphus/plugin-todo": "workspace:*",
     "@types/node": "^20",
     "@types/pacote": "^11.1.8",
