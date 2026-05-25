@@ -56,6 +56,11 @@ import {
 import { PluginManager } from './plugin-manager';
 import { searchNpm, fetchMarketplace } from './plugin-search';
 
+// Wrapped in an async IIFE so the bundled output has no top-level await.
+// Node SEA's ESM main support is brittle (Node 24 still loads .mjs blobs as
+// CJS in practice), so the build pipeline emits CJS — and CJS forbids TLA.
+async function main() {
+
 // Load both .env and .env.local; then layer ~/.sisyphus/config.json over.
 loadDotenv();
 loadDotenv({ path: '.env.local', override: true });
@@ -64,7 +69,7 @@ await ensurePluginsRoot();
 
 const PORT = Number(process.env.SISYPHUS_DAEMON_PORT ?? 8787);
 
-export const registry = new Registry();
+const registry = new Registry();
 const router = new Router(registry);
 const pluginManager = new PluginManager(registry);
 const startedAt = Date.now();
@@ -412,3 +417,11 @@ const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
 });
 
 wsHub.attach(server as unknown as HTTPServer);
+
+} // end of main()
+
+main().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error('[sisyphus-daemon] fatal:', err);
+  process.exit(1);
+});

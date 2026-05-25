@@ -77,6 +77,8 @@ Config: `packages/daemon/.env.local` (OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MO
 | M23 | Plugin discovery (npm search + curated marketplace) | 05-23 |
 | M22.1 | Tauri desktop shell phase-1 (spawn daemon via pnpm) | 05-23 |
 | M22.2 | Tauri sidecar — bun-compiled daemon binary as externalBin | 05-23 |
+| M22.3 | Daemon SEA migration (Node 24 single-executable, drops Bun) | 05-25 |
+| M22.4 | UI dist in .app/Contents/Resources/ui — self-contained .dmg | 05-25 |
 
 ## Key files to know
 
@@ -124,9 +126,14 @@ Config path: `~/.sisyphus/plugins.config.json`
 
 ## What just happened (most recent work)
 
-**Today (2026-05-23):**
+**Today (2026-05-25):**
+- M22.3: Replaced Bun-compiled sidecar with Node 24 SEA. `build:bin` now runs esbuild → CJS bundle → `node --experimental-sea-config` → `postject` inject into a `lipo -thin`'d copy of `node` → `codesign --sign -` ad-hoc. ~118 MB binary, full npm ecosystem (native addons work, no Bun compatibility roulette). Plugin loader's `createRequire(import.meta.url)` falls back to `__filename` for CJS bundle.
+- M22.4: UI dist now lives at `Sisyphus.app/Contents/Resources/ui/` via `tauri.conf.json` `resources` map. `lib.rs::locate_ui_dir` uses `app.path().resource_dir().join("ui")` in prod, falls back to monorepo `packages/ui/dist` in dev. The shipped .app is fully self-contained.
+- `bundle.targets` reduced to `["app"]`; we dropped Tauri's dmg target because create-dmg's AppleScript step intermittently fails ("AppleEvent timed out" -1712). `scripts/make-dmg.sh` uses plain `hdiutil` to pack the .app into a 49 MB UDZO dmg.
+
+**Earlier (2026-05-23):**
 - M22.1: Added Tauri v2 desktop shell. Rust binary that spawns the daemon as a child process, polls `/health`, then reloads the webview. On close, kills the daemon.
-- M22.2: Bundled the daemon as a Tauri sidecar. `pnpm --filter @sisyphus/daemon build:bin` runs `bun build --compile` to produce `src-tauri/binaries/sisyphus-daemon-<triple>` (68 MB). `tauri.conf.json` lists it as `externalBin`; `lib.rs` resolves it from `current_exe` sibling (prod / `cargo tauri dev` copy) or `src-tauri/binaries/` (fresh build) and falls back to `pnpm dev` so a clean clone still boots.
+- M22.2: Bundled the daemon as a Tauri sidecar via `bun build --compile` (superseded by M22.3).
 - M23: Plugin discovery — daemon can search npm registry for `keywords:sisyphus-plugin` packages, and serves a curated marketplace from GitHub `marketplace.json`
 
 **Yesterday (2026-05-22):**
@@ -141,12 +148,14 @@ Config path: `~/.sisyphus/plugins.config.json`
 
 ## What's next (TODO)
 
-1. **M22 Phase-2.5**: Bundle the built UI inside the .app so the daemon can serve `index.html` without needing the monorepo on disk. Today the sidecar runs standalone but the prod bundle still relies on `packages/ui/dist` via `SISYPHUS_UI_DIR`.
-2. **Plugin storage upgrade**: SQLite or LevelDB instead of JSON files
-3. **UI auth flow**: Production auth for non-dev users (login/OAuth)
-4. **Cross-plugin visibility**: Should plugins see each other's data?
-5. **Multi-agent UI**: How to display parallel agent results
-6. **More plugins**: Build actually useful plugins beyond the reference ones
+1. **M24 Plugin process isolation**: Plugins currently dynamic-import into the daemon process. To open the door to a public marketplace, spawn each plugin as a `child_process.fork` and route the existing `ctx.invokeSkill` API through stdio JSON-RPC (MCP-flavor). Plugin authors get crash isolation + free language choice; we get a real security boundary.
+2. **Apple Developer codesign**: $99/yr account so users don't need the Gatekeeper bypass dance. Defer until we have non-internal users.
+3. **arm64 build**: `lipo` step is host-only; cross-compiling SEA needs a clean arm64 node binary. Add CI runners.
+4. **Publish plugin-base + plugin-todo to npm**: marketplace install button currently fails on these because pacote can't resolve them outside the workspace.
+5. **Plugin storage upgrade**: SQLite or LevelDB instead of JSON files
+6. **UI auth flow**: Production auth for non-dev users (login/OAuth)
+7. **Multi-agent UI**: How to display parallel agent results
+8. **More plugins**: Build actually useful plugins beyond the reference ones
 
 ## Dev shortcuts
 

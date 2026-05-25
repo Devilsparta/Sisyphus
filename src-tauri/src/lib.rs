@@ -9,7 +9,7 @@
 //      same URL the web-deploy form uses; daemon serves UI + API + WS.
 //   4. On shutdown, kill the daemon child cleanly.
 //
-// Daemon source resolution (phase-2):
+// Daemon source resolution:
 //   - Prefer the bundled sidecar binary (`sisyphus-daemon[-<triple>]`)
 //     placed next to the current exe by Tauri. This is the prod path
 //     for .app/.dmg distribution and the default when `cargo tauri dev`
@@ -20,12 +20,21 @@
 //   - Fall back to `pnpm --filter @sisyphus/daemon start` so fresh
 //     clones can still `cargo tauri dev` without running build:bin
 //     first.
+//
+// UI directory resolution (M22 phase-2.5):
+//   - In prod (.app bundle), `packages/ui/dist` is shipped under
+//     `Sisyphus.app/Contents/Resources/ui/`. We resolve it via
+//     `app.path().resource_dir().join("ui")` and forward it to the
+//     daemon as `SISYPHUS_UI_DIR` so the daemon's static handler can
+//     serve `index.html` + hashed assets.
+//   - In dev (`cargo tauri dev`), Tauri may not stage resources; fall
+//     back to the monorepo's `packages/ui/dist`.
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use tauri::Manager;
+use tauri::{App, Manager};
 
 const DAEMON_HEALTH_URL: &str = "http://localhost:8787/health";
 const DAEMON_BOOT_TIMEOUT_SECS: u64 = 30;
@@ -72,18 +81,60 @@ fn locate_daemon_sidecar() -> Option<PathBuf> {
     find_sidecar_in(&dev_dir)
 }
 
-fn spawn_daemon() -> std::io::Result<Child> {
+/// Find the UI dir to forward to the daemon as `SISYPHUS_UI_DIR`.
+/// Prod: bundled under `<resources>/ui/`. Dev fallback: monorepo `packages/ui/dist`.
+fn locate_ui_dir(app: &App) -> Option<PathBuf> {
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let candidate = resource_dir.join("ui");
+        if candidate.join("index.html").exists() {
+            return Some(candidate);
+        }
+    }
+    let dev_candidate = workspace_root().join("packages/ui/dist");
+    if dev_candidate.join("index.html").exists() {
+        return Some(dev_candidate);
+    }
+    None
+}
+
+/// Choose a working directory for the spawned daemon.
+///   - In dev (cargo tauri dev / build run from a checkout), workspace_root()
+///     exists — use it so daemon picks up the repo's .env/.env.local.
+///   - In a shipped .app, workspace_root() refers to the dev machine and
+///     doesn't exist on the user's box; fall back to $HOME so spawn() doesn't
+///     fail with ENOENT. The daemon will silently skip the missing .env files.
+fn pick_daemon_cwd() -> PathBuf {
     let root = workspace_root();
-    let ui_dir = root.join("packages/ui/dist");
+    if root.exists() {
+        return root;
+    }
+    dirs_home_or_root()
+}
+
+fn dirs_home_or_root() -> PathBuf {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/"))
+}
+
+fn spawn_daemon(app: &App) -> std::io::Result<Child> {
+    let cwd = pick_daemon_cwd();
     let mut envs: Vec<(&str, String)> = Vec::new();
-    if ui_dir.join("index.html").exists() {
+    if let Some(ui_dir) = locate_ui_dir(app) {
+        log::info!("[sisyphus] forwarding UI dir to daemon: {}", ui_dir.display());
         envs.push(("SISYPHUS_UI_DIR", ui_dir.to_string_lossy().to_string()));
+    } else {
+        log::warn!("[sisyphus] no UI dir found (resources nor dev fallback); daemon will start without static UI");
     }
 
     if let Some(sidecar) = locate_daemon_sidecar() {
-        log::info!("[sisyphus] spawning daemon sidecar: {}", sidecar.display());
+        log::info!(
+            "[sisyphus] spawning daemon sidecar: {} (cwd={})",
+            sidecar.display(),
+            cwd.display()
+        );
         let mut cmd = Command::new(&sidecar);
-        cmd.current_dir(&root)
+        cmd.current_dir(&cwd)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit());
         for (k, v) in &envs {
@@ -94,11 +145,11 @@ fn spawn_daemon() -> std::io::Result<Child> {
 
     log::info!(
         "[sisyphus] no sidecar found; falling back to `pnpm --filter @sisyphus/daemon start` at {}",
-        root.display()
+        cwd.display()
     );
     let mut cmd = Command::new("pnpm");
     cmd.args(["--filter", "@sisyphus/daemon", "start"])
-        .current_dir(&root)
+        .current_dir(&cwd)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
     for (k, v) in &envs {
@@ -144,7 +195,7 @@ pub fn run() {
             }
 
             // Spawn the daemon and stash the child handle for cleanup.
-            let child = spawn_daemon()
+            let child = spawn_daemon(app)
                 .map_err(|e| format!("failed to spawn daemon: {e}"))?;
             app.manage(DaemonChild(Mutex::new(Some(child))));
 

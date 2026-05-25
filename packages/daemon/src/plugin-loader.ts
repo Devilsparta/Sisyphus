@@ -27,7 +27,14 @@ export interface LoadedPlugin {
 
 const DEFAULT_UI_ENTRY = './dist/ui.mjs';
 
-const requireFromHere = createRequire(import.meta.url);
+// In ESM (tsx dev), use import.meta.url. In CJS bundle (SEA build), import.meta.url
+// is undefined — fall back to __filename, which esbuild populates with the bundle
+// path. Prod doesn't hit the fallback resolve path anyway (plugins live under
+// ~/.sisyphus/plugins-node_modules), but tsx dev mode does.
+const requireFromHere = createRequire(
+  (import.meta as { url?: string }).url ??
+    (typeof __filename === 'string' ? __filename : process.execPath),
+);
 
 async function fileExists(p: string): Promise<boolean> {
   try {
