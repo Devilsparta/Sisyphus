@@ -82,6 +82,7 @@ Config: `packages/daemon/.env.local` (OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MO
 | M24.1 | Plugin process isolation — broker + stdio JSON-RPC vertical slice | 05-25 |
 | M24.2 | Agent API parity — signal/abort, conversationId, host.querySkills | 05-26 |
 | M24.3 | Migrated plugin-base + plugin-todo onto broker; daemon HTTP /api/chat verified | 05-26 |
+| M24.4 | SEA self-spawn smoke — daemon binary spawning itself as plugin host works | 05-26 |
 
 ## Key files to know
 
@@ -130,6 +131,7 @@ Config path: `~/.sisyphus/plugins.config.json`
 ## What just happened (most recent work)
 
 **Today (2026-05-26):**
+- M24.4: SEA self-spawn validated end-to-end. New smoke test (`packages/daemon/test/sea-smoke.mts`) uses the daemon SEA binary itself as the spawner instead of `node --import tsx`, then runs the same RPC surface as broker-smoke. Result: 9/9 assertions pass — `SISYPHUS_MODE=plugin-host` dispatch fires, the binary loads a pre-compiled `.mjs` plugin from disk, RPC over stdio works, cancel-via-signal works, deactivate is clean. This means the prod path (`Sisyphus.app/Contents/MacOS/sisyphus-daemon` spawned by Tauri, then spawning itself as plugin host) works without a separate node binary in the bundle. `plugin-hello` switched to npm-shape (`dist/index.mjs` via esbuild bundle, 2.6 KB) — the SEA Node runtime can't load `.ts`, so all production plugins must ship pre-compiled. Added `pnpm --filter @sisyphus/daemon test:smoke` that runs broker-smoke + migration-smoke (dev tsx) + rebuilds SEA + runs sea-smoke; reproducible single command for the whole M24 contract.
 - M24.3: Reference plugins migrated. Both `@sisyphus/plugin-base` and `@sisyphus/plugin-todo` now run through the broker exactly the same way `plugin-hello` does. A new smoke test (`packages/daemon/test/plugin-migration-smoke.mts`, 14 assertions) covers: agent registration of all four reference agents and the current-time skill; `time-helper` end-to-end (tool_call → cross-plugin invokeSkill via host RPC → tool_result → token → done); `plugin-todo` onActivate hydrating from disk; storage round-trip (add task → persist → fresh broker re-activates and re-reads). Found and fixed a bug: storage namespacing keyed off `state.pluginId` which was empty during onActivate (broker only learned the manifest id from the `activate` reply, after onActivate had already run). Now `resolvePluginPaths` pre-reads `sisyphus.id` from package.json so the broker namespaces storage / logs from the first RPC; the live manifest still reconciles if it disagrees.
 - Daemon HTTP integration verified: booting `pnpm --filter @sisyphus/daemon start` with both plugins enabled, hitting `/api/chat` with "what time is it" routes through the keyword router → broker → child process → tool_call/tool_result/token/done streaming back as SSE, all events automatically `source`-tagged by the router. Same wire shape users had before M24, now with process isolation under the hood.
 - M24.2: Agent API parity for brokered plugins. Three gaps closed against M24.1:
@@ -161,21 +163,16 @@ Config path: `~/.sisyphus/plugins.config.json`
 
 ## What's next (TODO)
 
-1. **M24.4 SEA self-spawn smoke**: confirm the prod path — daemon SEA binary spawning *itself* under a packaged .app actually works. Today only the dev (tsx) spawner is exercised by smoke tests. Will also need to verify that plugins shipped as published .js (no tsx loader) load correctly under SEA. Probably needs a build:bin step for plugins too.
-2. **M24.5 Dev mode hot reload**: respawn plugin process on fs change. M17 watcher already exists for the in-process flow; rewire it to call `broker.deactivate` + `activate` instead of forcing a daemon restart. UI stays up.
-3. **M24.6 Crash UI**: plugin process exit → daemon marks `crashed`, surfaces to `/api/plugins` reply, UI shows "needs re-enable" badge.
-4. **Assistant agent + LLM tool calling under broker**: the M24.2 smoke covers the wiring but doesn't actually drive an LLM. Worth running plugin-base.assistant against a real key to surface latency / streaming buffering issues.
-5. **spawnAgent over RPC**: needed by M14 fan-out. Right now `ctx.spawnAgent` throws in the child. Implementation: `host.spawnAgent` RPC → broker resolves owner plugin → recurses via `broker.invokeAgent` with source-tagged emit forwarding.
-3. **M24.4 SEA self-spawn smoke**: confirm the prod path — daemon SEA binary spawning *itself* with `SISYPHUS_MODE=plugin-host` — actually works under a packaged `.app`. Today only the dev (tsx) spawner is exercised by `broker-smoke.mts`; need a parallel test against the SEA binary + a bundled plugin .js.
-4. **M24.5 Dev mode hot reload**: respawn plugin process on fs change (M17 watcher → broker.deactivate + activate). UI stays up.
-5. **M24.6 Crash UI**: plugin process exit → daemon marks `crashed`, surfaces to `/api/plugins` reply, UI shows "needs re-enable" badge.
-6. **Apple Developer codesign**: $99/yr account so users don't need the Gatekeeper bypass dance. Defer until we have non-internal users.
-3. **arm64 build**: `lipo` step is host-only; cross-compiling SEA needs a clean arm64 node binary. Add CI runners.
-4. **Publish plugin-base + plugin-todo to npm**: marketplace install button currently fails on these because pacote can't resolve them outside the workspace.
-5. **Plugin storage upgrade**: SQLite or LevelDB instead of JSON files
-6. **UI auth flow**: Production auth for non-dev users (login/OAuth)
-7. **Multi-agent UI**: How to display parallel agent results
-8. **More plugins**: Build actually useful plugins beyond the reference ones
+1. **M24.5 Dev mode hot reload**: respawn plugin process on fs change. M17 watcher already exists for the in-process flow; rewire it to call `broker.deactivate` + `activate` instead of forcing a daemon restart. UI stays up.
+2. **M24.6 Crash UI**: plugin process exit → daemon marks `crashed`, surfaces to `/api/plugins` reply, UI shows "needs re-enable" badge.
+3. **Assistant agent + LLM tool calling under broker**: the M24.2 smoke covers the wiring but doesn't actually drive an LLM. Worth running plugin-base.assistant against a real key to surface latency / streaming buffering issues.
+4. **spawnAgent over RPC**: needed by M14 fan-out. Right now `ctx.spawnAgent` throws in the child. Implementation: `host.spawnAgent` RPC → broker resolves owner plugin → recurses via `broker.invokeAgent` with source-tagged emit forwarding.
+5. **arm64 build**: `lipo` step is host-only; cross-compiling SEA needs a clean arm64 node binary. Add CI runners.
+6. **Publish plugin-base + plugin-todo to npm**: marketplace install button currently fails on these because pacote can't resolve them outside the workspace.
+7. **Plugin storage upgrade**: SQLite or LevelDB instead of JSON files
+8. **UI auth flow**: Production auth for non-dev users (login/OAuth)
+9. **Multi-agent UI**: How to display parallel agent results
+10. **Apple Developer codesign**: $99/yr account so users don't need the Gatekeeper bypass dance. Defer until we have non-internal users.
 
 ## Dev shortcuts
 

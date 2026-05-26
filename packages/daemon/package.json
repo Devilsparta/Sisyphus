@@ -9,7 +9,11 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "build:bin": "node ../../scripts/build-daemon-bin.mjs"
+    "build:bin": "node ../../scripts/build-daemon-bin.mjs",
+    "test:smoke:broker": "node --import=tsx test/broker-smoke.mts",
+    "test:smoke:migration": "node --import=tsx test/plugin-migration-smoke.mts",
+    "test:smoke:sea": "node --import=tsx test/sea-smoke.mts",
+    "test:smoke": "pnpm --filter @sisyphus/plugin-hello build && pnpm test:smoke:broker && pnpm test:smoke:migration && pnpm build:bin && pnpm test:smoke:sea"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",

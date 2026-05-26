@@ -4,9 +4,9 @@
   "private": true,
   "description": "Test fixture for the M24 plugin broker — minimal echo skill + agent.",
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.mjs",
   "exports": {
-    ".": "./src/index.ts",
+    ".": "./dist/index.mjs",
     "./package.json": "./package.json"
   },
   "sisyphus": {
@@ -22,7 +22,8 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "node build.mjs"
   },
   "keywords": ["sisyphus-plugin"],
   "dependencies": {
