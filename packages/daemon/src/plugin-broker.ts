@@ -119,13 +119,16 @@ export class PluginBroker {
       ...process.env,
       SISYPHUS_MODE: 'plugin-host',
       SISYPHUS_PLUGIN_ENTRY: paths.daemonEntryPath,
-      SISYPHUS_PLUGIN_ID: packageName,
+      SISYPHUS_PLUGIN_ID: paths.pluginId,
     };
     const child = this.spawner(childEnv);
 
+    // pluginId is pre-resolved from package.json sisyphus.id so storage /
+    // log namespacing works for RPCs fired during onActivate (which runs
+    // inside the activate RPC, before the host has seen the live manifest).
     const state: PluginChild = {
       packageName,
-      pluginId: '',
+      pluginId: paths.pluginId,
       child,
       rpcId: 1,
       pending: new Map(),
@@ -133,17 +136,23 @@ export class PluginBroker {
       crashed: false,
     };
     this.children.set(packageName, state);
+    this.byPluginId.set(paths.pluginId, state);
     this.attachStdio(state);
     this.attachExit(state);
 
     try {
       await this.rpc(state, 'init', { apiVersion: 1 });
       const reply = (await this.rpc(state, 'activate', {})) as ActivationResult;
-      state.pluginId = reply.manifest.id;
-      this.byPluginId.set(reply.manifest.id, state);
+      // Reconcile if the live manifest disagrees with the pre-read sisyphus.id.
+      if (reply.manifest.id !== state.pluginId) {
+        this.byPluginId.delete(state.pluginId);
+        state.pluginId = reply.manifest.id;
+        this.byPluginId.set(reply.manifest.id, state);
+      }
       return { ...reply, uiBundlePath: paths.uiBundlePath };
     } catch (err) {
       this.children.delete(packageName);
+      this.byPluginId.delete(state.pluginId);
       try {
         child.kill('SIGTERM');
       } catch {

@@ -127,6 +127,14 @@ export interface ResolvedPluginPaths {
   packageRoot: string;
   daemonEntryPath: string;
   uiBundlePath: string | null;
+  /**
+   * The plugin's manifest id, pre-read from package.json's `sisyphus.id`
+   * field so the broker can route per-plugin storage / log namespacing
+   * BEFORE the child process has had a chance to reply to `activate`
+   * (which is the only RPC that returns the live manifest). When the
+   * package omits the sisyphus block this falls back to the package name.
+   */
+  pluginId: string;
 }
 
 export async function resolvePluginPaths(
@@ -144,11 +152,25 @@ export async function resolvePluginPaths(
   const uiCandidate = path.resolve(resolved.packageRoot, DEFAULT_UI_ENTRY);
   const uiBundlePath = (await fileExists(uiCandidate)) ? uiCandidate : null;
 
+  // Pre-read the manifest id from package.json so the broker can namespace
+  // storage / logs from the very first RPC. The full live manifest still
+  // travels in the activate reply.
+  let pluginId = pkgName;
+  try {
+    const pkgJson = JSON.parse(
+      await fs.readFile(path.join(resolved.packageRoot, 'package.json'), 'utf-8'),
+    ) as { sisyphus?: { id?: string } };
+    if (pkgJson.sisyphus?.id) pluginId = pkgJson.sisyphus.id;
+  } catch {
+    // Keep pkgName fallback; broker will warn if activate reply disagrees.
+  }
+
   return {
     packageName: pkgName,
     packageRoot: resolved.packageRoot,
     daemonEntryPath,
     uiBundlePath,
+    pluginId,
   };
 }
 
