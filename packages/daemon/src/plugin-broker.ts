@@ -65,6 +65,15 @@ export type CrossPluginSkillInvoker = (
 ) => Promise<unknown>;
 
 /**
+ * Return the skills a given caller plugin is allowed to see. Daemon
+ * implements this by reading the central Registry and applying M13 ACL
+ * (own namespace + manifest.requires.skills).
+ */
+export type SkillsForPluginProvider = (
+  callerPluginId: string,
+) => SkillDescriptor[];
+
+/**
  * Spawn the actual child process for plugin-host mode. Daemon entry picks
  * the right form (SEA self-spawn in prod, `node --import tsx <entry>` in
  * dev) and hands it to the broker as a closure.
@@ -77,11 +86,16 @@ export class PluginBroker {
   /** conversationId → agent emit callback, set per invokeAgent call. */
   private agentEmits = new Map<string, (ev: AgentEvent) => void>();
   private crossInvoke: CrossPluginSkillInvoker | null = null;
+  private skillsForPlugin: SkillsForPluginProvider | null = null;
 
   constructor(private spawner: PluginChildSpawner) {}
 
   setCrossPluginSkillInvoker(fn: CrossPluginSkillInvoker): void {
     this.crossInvoke = fn;
+  }
+
+  setSkillsForPluginProvider(fn: SkillsForPluginProvider): void {
+    this.skillsForPlugin = fn;
   }
 
   isActivated(packageName: string): boolean {
@@ -193,15 +207,35 @@ export class PluginBroker {
     userMessage: string,
   ): Promise<void> {
     const state = this.requireActive(packageName);
+
+    // Snapshot the skills this caller plugin is allowed to see at invoke
+    // time; the plugin uses it as ctx.querySkills() inside the agent.
+    const availableSkills = this.skillsForPlugin
+      ? this.skillsForPlugin(state.pluginId)
+      : [];
+
     this.agentEmits.set(runCtx.conversationId, runCtx.emit);
+
+    // Forward an abort on runCtx.signal as an `agent.cancel` notification
+    // to the child. Plugin-host runtime fires the matching AbortController
+    // and the agent's signal-aware code unwinds.
+    const onAbort = (): void => {
+      this.writeNotification(state, 'agent.cancel', {
+        conversationId: runCtx.conversationId,
+      });
+    };
+    runCtx.signal.addEventListener('abort', onAbort, { once: true });
+
     try {
       await this.rpc(state, 'invokeAgent', {
         agentName: agentId,
         userMessage,
         history: runCtx.history,
         conversationId: runCtx.conversationId,
+        availableSkills,
       });
     } finally {
+      runCtx.signal.removeEventListener('abort', onAbort);
       this.agentEmits.delete(runCtx.conversationId);
     }
   }
@@ -256,6 +290,17 @@ export class PluginBroker {
       ? { jsonrpc: '2.0', id, error }
       : { jsonrpc: '2.0', id, result };
     state.child.stdin?.write(JSON.stringify(obj) + '\n');
+  }
+
+  private writeNotification(
+    state: PluginChild,
+    method: string,
+    params: unknown,
+  ): void {
+    if (state.crashed || state.child.stdin?.destroyed) return;
+    state.child.stdin?.write(
+      JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n',
+    );
   }
 
   private attachStdio(state: PluginChild): void {
@@ -389,6 +434,15 @@ export class PluginBroker {
           state.pluginId,
         );
         return { result };
+      }
+      case 'host.querySkills': {
+        // Snapshot, not subscription. Plugin gets the ACL-filtered set as
+        // it stands now; if a new skill registers later in the same agent
+        // run the plugin won't see it without another querySkills call.
+        const skills = this.skillsForPlugin
+          ? this.skillsForPlugin(state.pluginId)
+          : [];
+        return { skills };
       }
       default:
         throw Object.assign(new Error(`unknown host method: ${method}`), {

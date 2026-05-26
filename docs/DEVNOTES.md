@@ -80,6 +80,7 @@ Config: `packages/daemon/.env.local` (OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MO
 | M22.3 | Daemon SEA migration (Node 24 single-executable, drops Bun) | 05-25 |
 | M22.4 | UI dist in .app/Contents/Resources/ui — self-contained .dmg | 05-25 |
 | M24.1 | Plugin process isolation — broker + stdio JSON-RPC vertical slice | 05-25 |
+| M24.2 | Agent API parity — signal/abort, conversationId, host.querySkills | 05-26 |
 
 ## Key files to know
 
@@ -127,7 +128,14 @@ Config path: `~/.sisyphus/plugins.config.json`
 
 ## What just happened (most recent work)
 
-**Today (2026-05-25):**
+**Today (2026-05-26):**
+- M24.2: Agent API parity for brokered plugins. Three gaps closed against M24.1:
+  - **signal/abort over RPC**: broker.invokeAgent now subscribes to `runCtx.signal`; on abort it writes an `agent.cancel` notification to the child, plugin-host-runtime fires the matching AbortController, signal-aware agent code unwinds and emits `done`/`cancelled`.
+  - **conversationId on cross-plugin invokeSkill**: plugin-host-runtime's `ctx.invokeSkill` now passes the run's `conversationId` in the `host.invokeSkill` params; the target skill's `SkillContext.conversationId` is no longer empty for RPC-routed calls.
+  - **host.querySkills RPC + ACL snapshot**: broker takes a `SkillsForPluginProvider` from plugin-manager. plugin-manager implements it with the same M13 canInvoke rule (own namespace + manifest.requires.skills). broker pre-resolves the snapshot at invoke time and passes it via `availableSkills` in `invokeAgent` params, so `ctx.querySkills()` stays synchronous on the plugin side. `host.querySkills` also exposed as a standalone RPC for late queries.
+- Smoke test extended to 13 assertions: cancel-mid-stream (long-runner agent emits 50 tokens with 20ms delay, aborted after 3), conversationId round-trip via echo skill, skill-lister agent emits its ACL-filtered skill list.
+
+**Yesterday (2026-05-25):**
 - M24.1: Plugin process isolation, vertical slice. Plugins now run as child processes; daemon ↔ plugin talk JSON-RPC over stdio (protocol spec: `docs/plugin-rpc.md`). New `plugin-broker.ts` manages child lifecycle + RPC client + dispatches plugin→host requests (storage / cross-plugin invokeSkill with M13 ACL). `plugin-host-runtime.ts` runs *inside* the child — daemon SEA binary self-spawns with `SISYPHUS_MODE=plugin-host`, loads the plugin entry, exposes a `PluginContext` whose storage/log/invokeSkill all tunnel back through stdio. `plugin-manager.ts` rewritten to wrap broker calls behind the same activate/deactivate facade, registering RPC-proxy skill handlers + agent impls into the central Registry — router and HTTP routes don't know they're talking to subprocesses. Smoke test (`packages/daemon/test/broker-smoke.mts`) covers init → activate → invokeSkill → invokeAgent (token stream over `agent.event` notification) → deactivate end-to-end against a new test fixture `@sisyphus/plugin-hello`. **Plugin author API unchanged**: same `export default { manifest, onActivate, agents, skillHandlers }`.
 - M22.3: Replaced Bun-compiled sidecar with Node 24 SEA. `build:bin` now runs esbuild → CJS bundle → `node --experimental-sea-config` → `postject` inject into a `lipo -thin`'d copy of `node` → `codesign --sign -` ad-hoc. ~118 MB binary, full npm ecosystem (native addons work, no Bun compatibility roulette). Plugin loader's `createRequire(import.meta.url)` falls back to `__filename` for CJS bundle.
 - M22.4: UI dist now lives at `Sisyphus.app/Contents/Resources/ui/` via `tauri.conf.json` `resources` map. `lib.rs::locate_ui_dir` uses `app.path().resource_dir().join("ui")` in prod, falls back to monorepo `packages/ui/dist` in dev. The shipped .app is fully self-contained.
@@ -150,8 +158,8 @@ Config path: `~/.sisyphus/plugins.config.json`
 
 ## What's next (TODO)
 
-1. **M24.2 API parity**: agent.event stream is wired but the in-flight conversations need full coverage of router behavior (signal/abort propagation across RPC, source-tagging fan-out events). cross-plugin `host.querySkills` RPC (right now agents only see their own plugin's skills). Validate `tool_call`/`tool_result` event round-trip with a real skill-invoking agent.
-2. **M24.3 Migrate plugin-base + plugin-todo**: switch from in-process-load to broker, verify reference plugins still work. Will probably surface edge cases not in the hello fixture (streaming agents that hit the LLM, persistent storage under load, dev-mode hot reload).
+1. **M24.3 Migrate plugin-base + plugin-todo**: switch from in-process-load to broker, verify reference plugins still work. Will surface edge cases not in the hello fixture (streaming agents that actually hit the LLM, persistent storage under load, dev-mode hot reload). Probably the spot where `spawnAgent` and source-tagged fan-out events get implemented properly.
+2. **tool_call / tool_result round-trip**: emit/notify path works in M24.2 but isn't exercised by a real skill-invoking agent — pick up in M24.3 with plugin-base's `assistant` agent.
 3. **M24.4 SEA self-spawn smoke**: confirm the prod path — daemon SEA binary spawning *itself* with `SISYPHUS_MODE=plugin-host` — actually works under a packaged `.app`. Today only the dev (tsx) spawner is exercised by `broker-smoke.mts`; need a parallel test against the SEA binary + a bundled plugin .js.
 4. **M24.5 Dev mode hot reload**: respawn plugin process on fs change (M17 watcher → broker.deactivate + activate). UI stays up.
 5. **M24.6 Crash UI**: plugin process exit → daemon marks `crashed`, surfaces to `/api/plugins` reply, UI shows "needs re-enable" badge.

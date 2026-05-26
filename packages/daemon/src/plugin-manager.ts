@@ -18,6 +18,7 @@ import type {
   AgentImpl,
   Disposable,
   PluginManifest,
+  SkillDescriptor,
   SkillHandler,
 } from '@sisyphus/kernel';
 import type { Registry } from './registry';
@@ -48,6 +49,9 @@ export class PluginManager {
           conversationId,
           callerPluginId,
         ),
+    );
+    broker.setSkillsForPluginProvider((callerPluginId) =>
+      this.skillsForPlugin(callerPluginId),
     );
   }
 
@@ -176,6 +180,22 @@ export class PluginManager {
    * router: skill in caller's namespace = OK, otherwise must be declared
    * in caller's `manifest.requires.skills`.
    */
+  /**
+   * Returns the skills the caller plugin is allowed to invoke — its own
+   * namespace plus whatever `manifest.requires.skills` opts in to. Same
+   * rule as `canInvokeSkill` in router.ts (M13), keep them in sync.
+   */
+  private skillsForPlugin(callerPluginId: string): SkillDescriptor[] {
+    const callerManifest = this.registry.getPluginManifest(callerPluginId);
+    const required = callerManifest?.requires?.skills ?? [];
+    const ownPrefix = `${callerPluginId}.`;
+    return this.registry
+      .querySkills()
+      .filter(
+        (s) => s.id.startsWith(ownPrefix) || required.includes(s.id),
+      );
+  }
+
   private async invokeCrossPluginSkill(
     skillId: string,
     args: Record<string, unknown>,

@@ -126,6 +126,14 @@ const collected: CollectedContributions = {
   cards: [],
 };
 
+/**
+ * In-flight agent runs, keyed by conversationId. Host sends an
+ * `agent.cancel` notification on user abort; we look up the matching
+ * AbortController and fire it. The plugin's agent.run is expected to
+ * observe ctx.signal (most LLM SDKs already do) and unwind.
+ */
+const agentRuns = new Map<string, AbortController>();
+
 function collectorRegistry(): RegistryAPI {
   return {
     registerView(view: ViewDescriptor): Disposable {
@@ -279,6 +287,12 @@ interface InvokeAgentParams {
   userMessage: string;
   history: ChatMessage[];
   conversationId: string;
+  /**
+   * ACL-filtered snapshot of skills the host wants this agent to see in
+   * querySkills(). Snapshotted at invoke time so the agent doesn't have
+   * to make an async RPC during synchronous LLM prompt assembly.
+   */
+  availableSkills?: SkillDescriptor[];
 }
 async function handleInvokeAgent(params: InvokeAgentParams): Promise<unknown> {
   if (!plugin) throw rpcError(ERR.NOT_ACTIVATED, 'plugin not loaded');
@@ -293,6 +307,10 @@ async function handleInvokeAgent(params: InvokeAgentParams): Promise<unknown> {
   }
 
   const ac = new AbortController();
+  agentRuns.set(params.conversationId, ac);
+
+  const availableSkills = params.availableSkills ?? [...collected.skills];
+
   const runCtx: AgentRunContext = {
     conversationId: params.conversationId,
     history: params.history,
@@ -307,24 +325,37 @@ async function handleInvokeAgent(params: InvokeAgentParams): Promise<unknown> {
       const r = (await callHost('host.invokeSkill', {
         skillName: id,
         args,
+        conversationId: params.conversationId,
       })) as { result: unknown };
       return r.result;
     },
     querySkills() {
-      // M24.1: returns this plugin's local view. Cross-plugin skill discovery
-      // is host-side; agents that need the full registry should query the
-      // host explicitly (TODO M24.2: add host.querySkills RPC).
-      return [...collected.skills];
+      return availableSkills;
     },
     async spawnAgent(_agentId, _userMessage) {
+      // TODO M24.3: route through host.spawnAgent so the daemon picks the
+      // owner plugin and a sub-run is brokered with source-tagged events.
       throw rpcError(
         ERR.METHOD_NOT_FOUND,
-        'spawnAgent over RPC: not implemented in M24.1',
+        'spawnAgent over RPC: not implemented yet',
       );
     },
   };
-  await agent.run(params.userMessage, runCtx);
+
+  try {
+    await agent.run(params.userMessage, runCtx);
+  } finally {
+    agentRuns.delete(params.conversationId);
+  }
   return {};
+}
+
+interface CancelParams {
+  conversationId: string;
+}
+function handleCancelNotification(params: CancelParams): void {
+  const ac = agentRuns.get(params.conversationId);
+  if (ac) ac.abort();
 }
 
 async function handleShutdown(_params: unknown): Promise<unknown> {
@@ -416,7 +447,18 @@ async function handleFrame(line: string): Promise<void> {
       pending.resolve(resp.result);
     }
   }
-  // Notifications from host: none defined in v1; ignore silently.
+  // Notifications from host
+  if ('method' in frame && !('id' in frame)) {
+    const notif = frame as RpcNotification;
+    switch (notif.method) {
+      case 'agent.cancel':
+        handleCancelNotification(notif.params as CancelParams);
+        break;
+      default:
+        // unknown notification — ignore
+        break;
+    }
+  }
 }
 
 // ── Entry ───────────────────────────────────────────────────────────────────

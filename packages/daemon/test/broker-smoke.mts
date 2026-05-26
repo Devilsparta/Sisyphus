@@ -58,18 +58,25 @@ async function main(): Promise<void> {
   );
   assertEq(
     'agents returned',
-    result.agents.map((a) => a.id),
-    ['plugin-hello.agent.hello-bot'],
+    result.agents.map((a) => a.id).sort(),
+    [
+      'plugin-hello.agent.hello-bot',
+      'plugin-hello.agent.long-runner',
+      'plugin-hello.agent.skill-lister',
+    ],
   );
 
-  console.log('[smoke] step 2: invoke echo skill');
+  console.log('[smoke] step 2: invoke echo skill (verify conversationId propagation)');
   const echoed = (await broker.invokeSkill(
     HELLO,
     'plugin-hello.skill.echo',
     { message: 'hi there' },
     'conv-smoke-1',
-  )) as { echoed: string };
-  assertEq('echo result', echoed, { echoed: 'you said: hi there' });
+  )) as { echoed: string; convo: string };
+  assertEq('echo result', echoed, {
+    echoed: 'you said: hi there',
+    convo: 'conv-smoke-1',
+  });
 
   console.log('[smoke] step 3: invoke hello-bot agent');
   const events: AgentEvent[] = [];
@@ -107,7 +114,99 @@ async function main(): Promise<void> {
     'hello there, you said "smoke msg"',
   );
 
-  console.log('[smoke] step 4: deactivate');
+  console.log('[smoke] step 4: querySkills snapshot via host RPC');
+  // skill-lister emits the JSON-stringified id list it can see via
+  // ctx.querySkills(). With no requires.skills declared, plugin-hello
+  // should see only its own skill.
+  const listerEvents: AgentEvent[] = [];
+  const listerCtx: AgentRunContext = {
+    conversationId: 'conv-smoke-3',
+    history: [],
+    emit: (ev) => listerEvents.push(ev),
+    signal: new AbortController().signal,
+    invokeSkill: async () => {
+      throw new Error('not exercised');
+    },
+    querySkills: () => [],
+    spawnAgent: async () => {
+      throw new Error('not exercised');
+    },
+  };
+  // Inject a skillsForPlugin provider that mimics what plugin-manager does
+  // in the real daemon. Without it, the broker would hand the plugin an
+  // empty list.
+  broker.setSkillsForPluginProvider((pluginId) => {
+    if (pluginId !== 'plugin-hello') return [];
+    return [
+      {
+        id: 'plugin-hello.skill.echo',
+        schema: {
+          type: 'function',
+          function: { name: 'plugin_hello_echo', description: '', parameters: {} },
+        },
+      },
+    ];
+  });
+  await broker.invokeAgent(
+    HELLO,
+    'plugin-hello.agent.skill-lister',
+    listerCtx,
+    'list em',
+  );
+  const tokenEv = listerEvents.find(
+    (e): e is AgentEvent & { type: 'token'; text: string } => e.type === 'token',
+  );
+  if (!tokenEv) throw new Error('skill-lister produced no token event');
+  const reportedSkills = JSON.parse(tokenEv.text) as string[];
+  assertEq('querySkills returned own skill', reportedSkills, [
+    'plugin-hello.skill.echo',
+  ]);
+
+  console.log('[smoke] step 5: long-runner cancel via runCtx.signal');
+  const cancelAc = new AbortController();
+  const cancelEvents: AgentEvent[] = [];
+  const cancelCtx: AgentRunContext = {
+    conversationId: 'conv-smoke-4',
+    history: [],
+    emit: (ev) => {
+      cancelEvents.push(ev);
+      // Cancel after 3 tokens
+      if (
+        ev.type === 'token' &&
+        cancelEvents.filter((e) => e.type === 'token').length === 3
+      ) {
+        cancelAc.abort();
+      }
+    },
+    signal: cancelAc.signal,
+    invokeSkill: async () => {
+      throw new Error('not exercised');
+    },
+    querySkills: () => [],
+    spawnAgent: async () => {
+      throw new Error('not exercised');
+    },
+  };
+  await broker.invokeAgent(
+    HELLO,
+    'plugin-hello.agent.long-runner',
+    cancelCtx,
+    'go',
+  );
+  const tokens = cancelEvents.filter((e) => e.type === 'token').length;
+  const doneEv = cancelEvents.find(
+    (e): e is AgentEvent & { type: 'done'; reason: string } => e.type === 'done',
+  );
+  if (!doneEv) throw new Error('long-runner produced no done event');
+  assertEq('done.reason after cancel', doneEv.reason, 'cancelled');
+  if (tokens >= 50) {
+    throw new Error(
+      `expected cancel before 50 tokens, got ${tokens} — abort didn't propagate`,
+    );
+  }
+  console.log(`  ✓ long-runner cancelled after ${tokens} tokens (< 50)`);
+
+  console.log('[smoke] step 6: deactivate');
   await broker.deactivate(HELLO);
   assertEq('isActivated after deactivate', broker.isActivated(HELLO), false);
 

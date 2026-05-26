@@ -46,15 +46,15 @@ is the contract between SDK and host.
 | `activate` | `{}` | `ContributionsSnapshot` | runs user's `onActivate(ctx)`; ctx accumulates registrations and they're returned in the reply |
 | `deactivate` | `{}` | `{}` | runs user's `onDeactivate(ctx)` if defined |
 | `invokeSkill` | `{ skillName: string, args: unknown }` | `{ result: unknown }` | host asks plugin to run one of its own skills |
-| `invokeAgent` | `{ agentName, userMessage, history, conversationId }` | `{}` (events stream via `agent.event` notification, see below) | reply lands only when agent emits `done` and the loop unwinds |
+| `invokeAgent` | `{ agentName, userMessage, history, conversationId, availableSkills? }` | `{}` (events stream via `agent.event` notification, see below) | reply lands only when agent emits `done` and the loop unwinds. `availableSkills` is an ACL-filtered snapshot the host pre-resolves; plugin's `ctx.querySkills()` returns it. |
 | `shutdown` | `{}` | `{}` | graceful, then host closes stdin |
 
 ## Methods — plugin → host (requests, expect reply)
 
 | method | params | result | notes |
 |---|---|---|---|
-| `host.invokeSkill` | `{ skillName: string, args: unknown }` | `{ result: unknown }` | broker dispatches to the owning plugin; **subject to ACL** (M13). errors with code `-32030` on ACL deny |
-| `host.querySkills` | `{}` | `{ skills: SkillDescriptor[] }` | only returns skills this plugin's manifest declares it `requires` |
+| `host.invokeSkill` | `{ skillName: string, args: unknown, conversationId?: string }` | `{ result: unknown }` | broker dispatches to the owning plugin; **subject to ACL** (M13). errors with code `-32030` on ACL deny. `conversationId` is forwarded to the target skill's `SkillContext`. |
+| `host.querySkills` | `{}` | `{ skills: SkillDescriptor[] }` | snapshot of skills the caller is allowed to see — own namespace + `manifest.requires.skills`. Snapshotted at call time, not subscription. |
 | `host.storage.get` | `{ key: string }` | `{ value: unknown \| null }` | per-plugin KV (M4); plugin id is implicit (taken from spawn env) |
 | `host.storage.set` | `{ key: string, value: unknown }` | `{}` | |
 | `host.storage.delete` | `{ key: string }` | `{}` | |
@@ -66,6 +66,12 @@ is the contract between SDK and host.
 |---|---|---|
 | `agent.event` | `{ conversationId: string, event: AgentEvent }` | host pipes event into the SSE stream for that conversation |
 | `log` | `{ level: 'info' \| 'warn' \| 'error', message: string, data?: unknown }` | structured log; merged into daemon stdout |
+
+## Notifications — host → plugin (no reply)
+
+| method | params | notes |
+|---|---|---|
+| `agent.cancel` | `{ conversationId: string }` | host wants the agent for this conversation aborted; SDK looks up the matching AbortController and fires it. Signal-aware agent code unwinds and is expected to emit a final `{ type: 'done', reason: 'cancelled' }`. |
 
 ## ContributionsSnapshot
 
