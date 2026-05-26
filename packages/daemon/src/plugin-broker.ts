@@ -34,7 +34,24 @@ export interface ActivationResult {
   views: ViewDescriptor[];
   cards: CardDescriptor[];
   uiBundlePath: string | null;
+  /**
+   * Absolute path of the file the child process imported as its plugin
+   * entry. Dev mode watches this for changes to drive hot reload via
+   * deactivate + activate.
+   */
+  daemonEntryPath: string;
 }
+
+/**
+ * Observer notified when a plugin's child process exits unexpectedly
+ * (not via deactivate). Plugin-manager subscribes so it can dispose
+ * the registry contributions of a dead plugin and surface the state
+ * to the UI / HTTP routes.
+ */
+export type CrashObserver = (
+  packageName: string,
+  info: { code: number | null; signal: NodeJS.Signals | null },
+) => void;
 
 type PendingMap = Map<
   number | string,
@@ -87,6 +104,9 @@ export class PluginBroker {
   private agentEmits = new Map<string, (ev: AgentEvent) => void>();
   private crossInvoke: CrossPluginSkillInvoker | null = null;
   private skillsForPlugin: SkillsForPluginProvider | null = null;
+  private crashObserver: CrashObserver | null = null;
+  /** Active deactivations — set so attachExit can tell intent vs accident. */
+  private deactivating = new Set<string>();
 
   constructor(private spawner: PluginChildSpawner) {}
 
@@ -96,6 +116,15 @@ export class PluginBroker {
 
   setSkillsForPluginProvider(fn: SkillsForPluginProvider): void {
     this.skillsForPlugin = fn;
+  }
+
+  /**
+   * Register a callback fired when a plugin child exits *outside* of a
+   * pending deactivate (i.e. it crashed, or was SIGKILLed externally).
+   * Wires plugin-manager to dispose registrations and surface the state.
+   */
+  setCrashObserver(fn: CrashObserver): void {
+    this.crashObserver = fn;
   }
 
   isActivated(packageName: string): boolean {
@@ -149,7 +178,11 @@ export class PluginBroker {
         state.pluginId = reply.manifest.id;
         this.byPluginId.set(reply.manifest.id, state);
       }
-      return { ...reply, uiBundlePath: paths.uiBundlePath };
+      return {
+        ...reply,
+        uiBundlePath: paths.uiBundlePath,
+        daemonEntryPath: paths.daemonEntryPath,
+      };
     } catch (err) {
       this.children.delete(packageName);
       this.byPluginId.delete(state.pluginId);
@@ -165,6 +198,7 @@ export class PluginBroker {
   async deactivate(packageName: string): Promise<void> {
     const state = this.children.get(packageName);
     if (!state) return;
+    this.deactivating.add(packageName);
     this.children.delete(packageName);
     if (state.pluginId) this.byPluginId.delete(state.pluginId);
 
@@ -336,10 +370,34 @@ export class PluginBroker {
       );
       for (const [, p] of state.pending) p.reject(err);
       state.pending.clear();
+
+      const wasDeactivating = this.deactivating.delete(state.packageName);
       // eslint-disable-next-line no-console
       console.warn(
-        `[plugin-broker] plugin "${state.packageName}" exited (code=${code}, signal=${signal})`,
+        `[plugin-broker] plugin "${state.packageName}" exited ` +
+          `(code=${code}, signal=${signal}, intentional=${wasDeactivating})`,
       );
+
+      // Unexpected exit (no pending deactivate) → notify observer so
+      // plugin-manager can dispose registry entries + flag the plugin.
+      if (!wasDeactivating && this.crashObserver) {
+        // Clean up internal maps in case deactivate() wasn't called.
+        if (this.children.get(state.packageName) === state) {
+          this.children.delete(state.packageName);
+        }
+        if (state.pluginId && this.byPluginId.get(state.pluginId) === state) {
+          this.byPluginId.delete(state.pluginId);
+        }
+        try {
+          this.crashObserver(state.packageName, { code, signal });
+        } catch (cbErr) {
+          // eslint-disable-next-line no-console
+          console.error(
+            `[plugin-broker] crash observer threw for "${state.packageName}":`,
+            cbErr,
+          );
+        }
+      }
     });
   }
 

@@ -27,15 +27,38 @@ import type { PluginBroker } from './plugin-broker';
 
 const ERR_ACL_DENIED = -32030;
 
-interface ActivatedRecord {
+export interface ActivatedRecord {
   packageName: string;
   manifest: PluginManifest;
   uiBundlePath: string | null;
+  daemonEntryPath: string;
   disposers: Disposable[];
 }
 
+export interface CrashedRecord {
+  packageName: string;
+  pluginId: string | null;
+  manifest: PluginManifest | null;
+  reason: string;
+  /** Wall-clock when the crash was observed. */
+  at: number;
+}
+
+/**
+ * Notified after plugin-manager has fully reacted to an unexpected child
+ * exit: registry entries disposed, internal state updated. Daemon
+ * subscribes to broadcast a WS event to the UI.
+ */
+export type CrashListener = (record: CrashedRecord) => void;
+
 export class PluginManager {
   private activated = new Map<string, ActivatedRecord>();
+  /**
+   * Plugins whose child process died unexpectedly. UI shows them as
+   * "crashed, needs reactivation"; the user calls reactivate() to clear.
+   */
+  private crashed = new Map<string, CrashedRecord>();
+  private crashListeners = new Set<CrashListener>();
 
   constructor(
     private registry: Registry,
@@ -53,14 +76,34 @@ export class PluginManager {
     broker.setSkillsForPluginProvider((callerPluginId) =>
       this.skillsForPlugin(callerPluginId),
     );
+    broker.setCrashObserver((pkg, info) => {
+      this.handleCrash(pkg, info);
+    });
   }
 
   isActivated(packageName: string): boolean {
     return this.activated.has(packageName);
   }
 
+  isCrashed(packageName: string): boolean {
+    return this.crashed.has(packageName);
+  }
+
+  getCrashed(packageName: string): CrashedRecord | undefined {
+    return this.crashed.get(packageName);
+  }
+
   listActivated(): ActivatedRecord[] {
     return Array.from(this.activated.values());
+  }
+
+  listCrashed(): CrashedRecord[] {
+    return Array.from(this.crashed.values());
+  }
+
+  onCrash(listener: CrashListener): () => void {
+    this.crashListeners.add(listener);
+    return () => this.crashListeners.delete(listener);
   }
 
   async activate(packageName: string): Promise<ActivatedRecord> {
@@ -68,8 +111,12 @@ export class PluginManager {
       return this.activated.get(packageName)!;
     }
 
+    // Activating a previously crashed plugin clears the crashed flag —
+    // user explicitly opted to retry.
+    this.crashed.delete(packageName);
+
     const result = await this.broker.activate(packageName);
-    const { manifest, uiBundlePath } = result;
+    const { manifest, uiBundlePath, daemonEntryPath } = result;
 
     // Manifest first so any cross-plugin ACL lookup during this activation
     // sees it. UI bundle endpoint also uses pluginRecords to resolve the
@@ -132,6 +179,7 @@ export class PluginManager {
       packageName,
       manifest,
       uiBundlePath,
+      daemonEntryPath,
       disposers,
     };
     this.activated.set(packageName, record);
@@ -171,6 +219,81 @@ export class PluginManager {
 
     // eslint-disable-next-line no-console
     console.log(`[plugin-manager] deactivated "${packageName}"`);
+  }
+
+  /**
+   * Dev-mode hot reload — kill the plugin child, re-activate fresh. Skips
+   * the work if the plugin isn't activated or crashed already. Idempotent
+   * if called for a crashed plugin: deactivate is a no-op since the child
+   * is already gone; activate then spawns fresh.
+   */
+  async respawn(packageName: string): Promise<ActivatedRecord | null> {
+    const wasActivated = this.activated.has(packageName);
+    const wasCrashed = this.crashed.has(packageName);
+    if (!wasActivated && !wasCrashed) return null;
+
+    if (wasActivated) {
+      await this.deactivate(packageName);
+    }
+    return await this.activate(packageName);
+  }
+
+  /**
+   * Broker → plugin-manager bridge for unexpected child exits. Disposes
+   * registry contributions of the now-defunct plugin, stashes a
+   * CrashedRecord for the API + UI, and fires registered listeners.
+   * The plugin's installer / enabled state is untouched so it stays
+   * "installed + enabled" — the user reactivates to bring it back.
+   */
+  private handleCrash(
+    packageName: string,
+    info: { code: number | null; signal: NodeJS.Signals | null },
+  ): void {
+    const prior = this.activated.get(packageName);
+    if (!prior) return;
+    this.activated.delete(packageName);
+
+    for (const d of prior.disposers) {
+      try {
+        d.dispose();
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[plugin-manager] crash cleanup: disposer for "${packageName}" threw:`,
+          err,
+        );
+      }
+    }
+
+    const reason =
+      info.signal !== null
+        ? `terminated by signal ${info.signal}`
+        : info.code !== null
+          ? `exited with code ${info.code}`
+          : 'process exited unexpectedly';
+
+    const crashRecord: CrashedRecord = {
+      packageName,
+      pluginId: prior.manifest.id,
+      manifest: prior.manifest,
+      reason,
+      at: Date.now(),
+    };
+    this.crashed.set(packageName, crashRecord);
+
+    // eslint-disable-next-line no-console
+    console.error(
+      `[plugin-manager] plugin "${packageName}" crashed: ${reason}; cleaned ${prior.disposers.length} registrations`,
+    );
+
+    for (const fn of this.crashListeners) {
+      try {
+        fn(crashRecord);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[plugin-manager] crash listener threw:', err);
+      }
+    }
   }
 
   /**

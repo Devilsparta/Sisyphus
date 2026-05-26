@@ -53,8 +53,8 @@ async function main(): Promise<void> {
   assertEq('manifest.id', result.manifest.id, 'plugin-hello');
   assertEq(
     'skills returned',
-    result.skills.map((s) => s.id),
-    ['plugin-hello.skill.echo'],
+    result.skills.map((s) => s.id).sort(),
+    ['plugin-hello.skill.echo', 'plugin-hello.skill.self-destruct'],
   );
   assertEq(
     'agents returned',
@@ -161,6 +161,9 @@ async function main(): Promise<void> {
   assertEq('querySkills returned own skill', reportedSkills, [
     'plugin-hello.skill.echo',
   ]);
+  // Note: only the echo skill is injected by the test's
+  // setSkillsForPluginProvider above; in a real daemon plugin-manager
+  // would surface both echo + self-destruct via the same path.
 
   console.log('[smoke] step 5: long-runner cancel via runCtx.signal');
   const cancelAc = new AbortController();

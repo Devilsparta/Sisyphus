@@ -1,21 +1,26 @@
 /**
- * Dev-mode plugin UI bundle watcher.
+ * Dev-mode plugin watcher.
  *
- * Activated by SISYPHUS_DEV=1. Watches each loaded plugin's
- * uiBundlePath for changes; when one fires, broadcasts a
- * `plugin.ui.bundle.changed` WS event with the plugin id and a
- * monotonic version counter so the UI can cache-bust its dynamic
- * import and reload that plugin.
+ * Activated by SISYPHUS_DEV=1. Two things are watched per activated
+ * plugin:
  *
- * The plugin's `pnpm dev` (esbuild --watch) is what writes new bundle
- * files; the daemon just notices and tells the UI.
+ *   1. uiBundlePath — when this file changes, broadcast a
+ *      `plugin.ui.bundle.changed` WS event so the UI cache-busts its
+ *      dynamic import. Daemon stays running; the React side hot-reloads
+ *      just that plugin.
  *
- * Debounces 100ms because esbuild typically writes the file in
- * multiple chunks during a rebuild.
+ *   2. daemonEntryPath (M24.5) — when the bundled daemon-side code
+ *      changes, call respawn(packageName). Plugin-manager deactivates +
+ *      activates so a fresh child process picks up the new code. UI
+ *      stays connected.
+ *
+ * Each path debounces 100 ms because esbuild typically writes a rebuild
+ * in multiple chunks.
  */
 import { watch, type FSWatcher } from 'node:fs';
 import { KernelEvents } from '@sisyphus/kernel';
 import type { Registry } from './registry';
+import type { PluginManager } from './plugin-manager';
 
 const DEBOUNCE_MS = 100;
 
@@ -31,11 +36,24 @@ export function isDevModeEnabled(): boolean {
 export function createDevWatcher(
   registry: Registry,
   broadcast: <T>(event: string, data: T) => void,
+  pluginManager: PluginManager,
 ): DevWatcher {
   const watchers: FSWatcher[] = [];
-  const versions = new Map<string, number>();
+  const uiVersions = new Map<string, number>();
   const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
   let started = false;
+
+  const debounce = (key: string, fn: () => void): void => {
+    const existing = debounceTimers.get(key);
+    if (existing) clearTimeout(existing);
+    debounceTimers.set(
+      key,
+      setTimeout(() => {
+        debounceTimers.delete(key);
+        fn();
+      }, DEBOUNCE_MS),
+    );
+  };
 
   return {
     start() {
@@ -43,41 +61,82 @@ export function createDevWatcher(
       started = true;
 
       const records = registry.queryPluginRecords();
+      const activated = new Map(
+        pluginManager.listActivated().map((r) => [r.manifest.id, r]),
+      );
+
       for (const record of records) {
-        if (!record.uiBundlePath) continue;
         const pluginId = record.manifest.id;
-        versions.set(pluginId, 0);
-        try {
-          const w = watch(record.uiBundlePath, () => {
-            const existing = debounceTimers.get(pluginId);
-            if (existing) clearTimeout(existing);
-            debounceTimers.set(
-              pluginId,
-              setTimeout(() => {
-                const next = (versions.get(pluginId) ?? 0) + 1;
-                versions.set(pluginId, next);
+
+        // 1. UI bundle — broadcast cache-bust to the browser.
+        if (record.uiBundlePath) {
+          uiVersions.set(pluginId, 0);
+          try {
+            const w = watch(record.uiBundlePath, () => {
+              debounce(`ui:${pluginId}`, () => {
+                const next = (uiVersions.get(pluginId) ?? 0) + 1;
+                uiVersions.set(pluginId, next);
                 // eslint-disable-next-line no-console
                 console.log(
-                  `[dev-watcher] ${pluginId} bundle changed → broadcast v${next}`,
+                  `[dev-watcher] ${pluginId} UI bundle changed → broadcast v${next}`,
                 );
                 broadcast(KernelEvents.PluginUiBundleChanged, {
                   pluginId,
                   version: next,
                 });
-              }, DEBOUNCE_MS),
+              });
+            });
+            watchers.push(w);
+            // eslint-disable-next-line no-console
+            console.log(
+              `[dev-watcher] watching ${pluginId} UI → ${record.uiBundlePath}`,
             );
-          });
-          watchers.push(w);
-          // eslint-disable-next-line no-console
-          console.log(
-            `[dev-watcher] watching ${pluginId} → ${record.uiBundlePath}`,
-          );
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            `[dev-watcher] failed to watch ${record.uiBundlePath}:`,
-            err instanceof Error ? err.message : err,
-          );
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[dev-watcher] failed to watch ${record.uiBundlePath}:`,
+              err instanceof Error ? err.message : err,
+            );
+          }
+        }
+
+        // 2. Daemon entry — kill + respawn the plugin child (M24.5).
+        const active = activated.get(pluginId);
+        if (active?.daemonEntryPath) {
+          const entry = active.daemonEntryPath;
+          const pkg = active.packageName;
+          try {
+            const w = watch(entry, () => {
+              debounce(`entry:${pkg}`, async () => {
+                // eslint-disable-next-line no-console
+                console.log(
+                  `[dev-watcher] ${pluginId} daemon entry changed → respawn`,
+                );
+                try {
+                  await pluginManager.respawn(pkg);
+                  // eslint-disable-next-line no-console
+                  console.log(`[dev-watcher] respawn ok: ${pluginId}`);
+                } catch (err) {
+                  // eslint-disable-next-line no-console
+                  console.error(
+                    `[dev-watcher] respawn failed for ${pluginId}:`,
+                    err instanceof Error ? err.message : err,
+                  );
+                }
+              });
+            });
+            watchers.push(w);
+            // eslint-disable-next-line no-console
+            console.log(
+              `[dev-watcher] watching ${pluginId} daemon entry → ${entry}`,
+            );
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[dev-watcher] failed to watch ${entry}:`,
+              err instanceof Error ? err.message : err,
+            );
+          }
         }
       }
     },

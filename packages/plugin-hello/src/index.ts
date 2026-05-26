@@ -33,6 +33,28 @@ const echoHandler: SkillHandler = async (args, ctx) => {
   return { echoed: `you said: ${message}`, convo: ctx.conversationId };
 };
 
+/**
+ * Crashes the plugin process on purpose — lets the broker smoke test
+ * verify M24.6 crash detection. The reply flushes before exit via
+ * setImmediate so the caller still gets a result before the child dies.
+ */
+const selfDestructSkill: SkillDescriptor = {
+  id: 'plugin-hello.skill.self-destruct',
+  schema: {
+    type: 'function',
+    function: {
+      name: 'plugin_hello_self_destruct',
+      description: 'Crash the plugin process on purpose (for crash tests).',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+};
+
+const selfDestructHandler: SkillHandler = async () => {
+  setImmediate(() => process.exit(42));
+  return { goodbye: true };
+};
+
 const helloAgent: AgentImpl = {
   descriptor: {
     id: 'plugin-hello.agent.hello-bot',
@@ -111,7 +133,7 @@ const plugin: SisyphusPlugin = {
       ],
       views: [],
       cards: [],
-      skills: [echoSkill],
+      skills: [echoSkill, selfDestructSkill],
     },
     // No UI bundle.
     uiEntry: '',
@@ -119,6 +141,7 @@ const plugin: SisyphusPlugin = {
   agents: [helloAgent, longRunnerAgent, skillListerAgent],
   skillHandlers: {
     [echoSkill.id]: echoHandler,
+    [selfDestructSkill.id]: selfDestructHandler,
   },
 };
 

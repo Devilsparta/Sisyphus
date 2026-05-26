@@ -150,11 +150,23 @@ for (const event of [
   bus.on(event, (data) => wsHub.broadcast(event, data));
 }
 
+// M24.6: surface plugin crashes to the UI via WS so it can flip a badge.
+pluginManager.onCrash((rec) => {
+  wsHub.broadcast('plugin.crashed', {
+    packageName: rec.packageName,
+    pluginId: rec.pluginId,
+    reason: rec.reason,
+    at: rec.at,
+  });
+});
+
 if (isDevModeEnabled()) {
   // eslint-disable-next-line no-console
   console.log('[sisyphus-daemon] SISYPHUS_DEV=1, starting plugin watcher');
-  const devWatcher = createDevWatcher(registry, (event, data) =>
-    wsHub.broadcast(event, data),
+  const devWatcher = createDevWatcher(
+    registry,
+    (event, data) => wsHub.broadcast(event, data),
+    pluginManager,
   );
   devWatcher.start();
 }
@@ -273,10 +285,15 @@ api.get('/plugins', async (c) => {
   const out = cfg.installed.map((pkgName) => {
     const enabled = cfg.enabled.includes(pkgName);
     const record = recordsByPkg.get(pkgName);
+    const activated = pluginManager.isActivated(pkgName);
+    const crashedRec = pluginManager.getCrashed(pkgName);
     return {
       packageName: pkgName,
       enabled,
-      activated: record !== undefined,
+      activated,
+      crashed: crashedRec !== undefined,
+      crashReason: crashedRec?.reason ?? null,
+      crashedAt: crashedRec?.at ?? null,
       id: record?.manifest.id ?? null,
       displayName: record?.manifest.displayName ?? null,
       version: record?.manifest.version ?? null,
@@ -285,6 +302,28 @@ api.get('/plugins', async (c) => {
     };
   });
   return c.json(out);
+});
+
+api.post('/plugins/reactivate', async (c) => {
+  const body = await c.req.json<{ packageName: string }>();
+  if (!body.packageName) {
+    return c.json({ ok: false, error: 'packageName required' }, 400);
+  }
+  try {
+    // respawn handles both "currently activated" (deactivate + activate) and
+    // "previously crashed" (just activate) — same call site for the UI.
+    const record = await pluginManager.respawn(body.packageName);
+    if (!record) {
+      // Not activated and not crashed; treat as a normal activate request.
+      await pluginManager.activate(body.packageName);
+    }
+    return c.json({ ok: true, packageName: body.packageName });
+  } catch (err) {
+    return c.json(
+      { ok: false, error: err instanceof Error ? err.message : String(err) },
+      500,
+    );
+  }
 });
 
 api.get('/plugins/:id/ui.mjs', async (c) => {

@@ -109,8 +109,8 @@ async function main(): Promise<void> {
   assertEq('manifest.id', result.manifest.id, 'plugin-hello');
   assertEq(
     'skills returned',
-    result.skills.map((s) => s.id),
-    ['plugin-hello.skill.echo'],
+    result.skills.map((s) => s.id).sort(),
+    ['plugin-hello.skill.echo', 'plugin-hello.skill.self-destruct'],
   );
   assertEq(
     'agents returned',
