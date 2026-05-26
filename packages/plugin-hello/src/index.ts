@@ -98,6 +98,29 @@ const longRunnerAgent: AgentImpl = {
 };
 
 /**
+ * Spawns plugin-base's time-helper via ctx.spawnAgent — exercises the
+ * cross-process fan-out path. Events from the sub-agent stream into
+ * this run's parent emit tagged with the sub-agent's source.
+ */
+const fanoutAgent: AgentImpl = {
+  descriptor: {
+    id: 'plugin-hello.agent.fanout-time',
+    displayName: 'Fanout-to-Time',
+    description: 'Asks plugin-base.agent.time-helper for the time via spawnAgent.',
+    spawnHint: 'when the hello plugin needs to delegate a time query.',
+  },
+  async run(_userMessage, ctx) {
+    ctx.emit({ type: 'token', text: 'spawning time-helper... ' });
+    await ctx.spawnAgent(
+      'plugin-base.agent.time-helper',
+      'sub: what time is it',
+    );
+    ctx.emit({ type: 'token', text: 'sub done' });
+    ctx.emit({ type: 'done', reason: 'stop' });
+  },
+};
+
+/**
  * Emits the ids of skills it can see via ctx.querySkills(). Validates the
  * M24.2 `host.querySkills` snapshot — plugins should see their own
  * skills plus any explicitly declared in manifest.requires.skills.
@@ -130,6 +153,7 @@ const plugin: SisyphusPlugin = {
         helloAgent.descriptor,
         longRunnerAgent.descriptor,
         skillListerAgent.descriptor,
+        fanoutAgent.descriptor,
       ],
       views: [],
       cards: [],
@@ -138,7 +162,7 @@ const plugin: SisyphusPlugin = {
     // No UI bundle.
     uiEntry: '',
   },
-  agents: [helloAgent, longRunnerAgent, skillListerAgent],
+  agents: [helloAgent, longRunnerAgent, skillListerAgent, fanoutAgent],
   skillHandlers: {
     [echoSkill.id]: echoHandler,
     [selfDestructSkill.id]: selfDestructHandler,

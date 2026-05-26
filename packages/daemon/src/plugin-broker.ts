@@ -11,11 +11,13 @@
  * See docs/plugin-rpc.md for the protocol contract.
  */
 import { type ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import type {
   AgentDescriptor,
   AgentEvent,
   AgentRunContext,
   CardDescriptor,
+  ChatMessage,
   PluginManifest,
   SkillDescriptor,
   ViewDescriptor,
@@ -91,6 +93,22 @@ export type SkillsForPluginProvider = (
 ) => SkillDescriptor[];
 
 /**
+ * M14 fan-out under broker. Daemon implements this to spawn a sub-agent
+ * (potentially in a different plugin's child process) sharing the same
+ * conversation. Events from the sub-agent stream back through the
+ * `parentEmit` so the UI sees them inline with source tags.
+ */
+export type SpawnAgentHandler = (params: {
+  callerPluginId: string;
+  parentAgentId: string;
+  parentRunId: string;
+  subAgentId: string;
+  subMessage: string;
+  conversationId: string;
+  history: ChatMessage[];
+}) => Promise<void>;
+
+/**
  * Spawn the actual child process for plugin-host mode. Daemon entry picks
  * the right form (SEA self-spawn in prod, `node --import tsx <entry>` in
  * dev) and hands it to the broker as a closure.
@@ -105,6 +123,7 @@ export class PluginBroker {
   private crossInvoke: CrossPluginSkillInvoker | null = null;
   private skillsForPlugin: SkillsForPluginProvider | null = null;
   private crashObserver: CrashObserver | null = null;
+  private spawnAgentHandler: SpawnAgentHandler | null = null;
   /** Active deactivations — set so attachExit can tell intent vs accident. */
   private deactivating = new Set<string>();
 
@@ -127,6 +146,16 @@ export class PluginBroker {
     this.crashObserver = fn;
   }
 
+  /**
+   * Register the handler invoked when a plugin fires `host.spawnAgent`.
+   * Daemon implements it (plugin-manager.spawnSubAgent) to find the owner
+   * plugin and run the sub-agent with its events streaming back to the
+   * caller's emit.
+   */
+  setSpawnAgentHandler(fn: SpawnAgentHandler): void {
+    this.spawnAgentHandler = fn;
+  }
+
   isActivated(packageName: string): boolean {
     const s = this.children.get(packageName);
     return !!s && !s.crashed;
@@ -136,6 +165,16 @@ export class PluginBroker {
     return Array.from(this.children.keys()).filter((p) =>
       this.isActivated(p),
     );
+  }
+
+  /**
+   * Look up the emit function currently registered for an agent run.
+   * spawnSubAgent uses this to pipe a sub-agent's events back through
+   * the parent's emit (typically the SSE stream emit at the top of the
+   * router → broker chain).
+   */
+  getEmitForRun(runId: string): ((ev: AgentEvent) => void) | undefined {
+    return this.agentEmits.get(runId);
   }
 
   async activate(packageName: string): Promise<ActivationResult> {
@@ -257,15 +296,16 @@ export class PluginBroker {
       ? this.skillsForPlugin(state.pluginId)
       : [];
 
-    this.agentEmits.set(runCtx.conversationId, runCtx.emit);
+    // Each invocation gets a fresh runId so concurrent agents in the
+    // same conversation (fan-out / spawnAgent) don't trample each
+    // other's emit registration.
+    const runId = randomUUID();
+    this.agentEmits.set(runId, runCtx.emit);
 
     // Forward an abort on runCtx.signal as an `agent.cancel` notification
-    // to the child. Plugin-host runtime fires the matching AbortController
-    // and the agent's signal-aware code unwinds.
+    // targeted at this specific runId.
     const onAbort = (): void => {
-      this.writeNotification(state, 'agent.cancel', {
-        conversationId: runCtx.conversationId,
-      });
+      this.writeNotification(state, 'agent.cancel', { runId });
     };
     runCtx.signal.addEventListener('abort', onAbort, { once: true });
 
@@ -275,11 +315,12 @@ export class PluginBroker {
         userMessage,
         history: runCtx.history,
         conversationId: runCtx.conversationId,
+        runId,
         availableSkills,
       });
     } finally {
       runCtx.signal.removeEventListener('abort', onAbort);
-      this.agentEmits.delete(runCtx.conversationId);
+      this.agentEmits.delete(runId);
     }
   }
 
@@ -511,6 +552,24 @@ export class PluginBroker {
           : [];
         return { skills };
       }
+      case 'host.spawnAgent': {
+        if (!this.spawnAgentHandler) {
+          throw Object.assign(
+            new Error('spawnAgent handler not configured'),
+            { code: ERR_INTERNAL },
+          );
+        }
+        await this.spawnAgentHandler({
+          callerPluginId: state.pluginId,
+          parentAgentId: (p.parentAgentId as string) ?? '',
+          parentRunId: (p.parentRunId as string) ?? '',
+          subAgentId: p.subAgentId as string,
+          subMessage: (p.subMessage as string) ?? '',
+          conversationId: (p.conversationId as string) ?? '',
+          history: ((p.history as ChatMessage[]) ?? []),
+        });
+        return {};
+      }
       default:
         throw Object.assign(new Error(`unknown host method: ${method}`), {
           code: ERR_METHOD_NOT_FOUND,
@@ -526,9 +585,9 @@ export class PluginBroker {
     const p = (params as Record<string, unknown>) ?? {};
     switch (method) {
       case 'agent.event': {
-        const convoId = p.conversationId as string;
+        const runId = p.runId as string;
         const event = p.event as AgentEvent;
-        const emit = this.agentEmits.get(convoId);
+        const emit = this.agentEmits.get(runId);
         if (emit) emit(event);
         break;
       }

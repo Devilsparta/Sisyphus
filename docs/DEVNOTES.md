@@ -85,6 +85,7 @@ Config: `packages/daemon/.env.local` (OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MO
 | M24.4 | SEA self-spawn smoke — daemon binary spawning itself as plugin host works | 05-26 |
 | M24.5 | Dev hot reload via broker.respawn (daemon-entry fs watch) | 05-26 |
 | M24.6 | Crashed plugin state — manager disposes, WS broadcast, /api/plugins reactivate | 05-26 |
+| M24.7 | spawnAgent over RPC (cross-process fan-out) + arm64 cross-build + UI crash badge | 05-26 |
 
 ## Key files to know
 
@@ -133,6 +134,11 @@ Config path: `~/.sisyphus/plugins.config.json`
 ## What just happened (most recent work)
 
 **Today (2026-05-26):**
+- M24.7: three remaining items closed.
+  - **UI crash badge**: plugin-base settings view extended — PluginInfo carries `crashed`/`crashReason`/`crashedAt`, the panel shows a red "· crashed" badge + the reason inline, and a "Reactivate" button that hits `POST /api/plugins/reactivate`. Plus a 3s poll so the badge surfaces without a manual refresh.
+  - **spawnAgent over RPC**: `host.spawnAgent` notification + dispatch. Each `broker.invokeAgent` now generates a UUID `runId`; agent.event notifications carry the runId, broker.agentEmits indexes by runId (instead of conversationId) so concurrent runs in the same conversation don't trample each other's emit. Plugin-host runtime auto-tags `event.source = agentName` if unset, router's existing source-preservation does the rest. `plugin-manager.spawnSubAgent` reads `broker.getEmitForRun(parentRunId)` to wire the sub-agent's emit straight back into the parent's emit chain. Verified by new `spawnagent-smoke.mts`: plugin-hello has a `fanout-time` agent that spawns plugin-base's `time-helper` (in another process), parent + sub events both stream into the same emit with correct source tags and sub-done lands before parent-done.
+  - **arm64 cross-build**: `SISYPHUS_TARGET_TRIPLE=aarch64-apple-darwin` makes `build:bin` download the matching nodejs.org darwin-arm64 tarball (cached at `~/.cache/sisyphus-build/`), skip the lipo step, and produce a single-arch arm64 daemon binary. `pnpm tauri build --target aarch64-apple-darwin` + `TARGET=aarch64-apple-darwin scripts/make-dmg.sh` complete the chain. Shipped: 49 MB x64 dmg + 47 MB arm64 dmg, both unsigned.
+- Full smoke chain now 57 assertions across 5 suites; `pnpm --filter @sisyphus/daemon test:smoke` builds plugin-hello, runs broker/migration/lifecycle/spawnagent under tsx dev, rebuilds the SEA binary, runs sea-smoke. All green.
 - M24.5 + M24.6: plugin lifecycle polish. Two missing pieces filled in:
   - **Hot reload (M24.5).** Broker's activate result now carries the resolved `daemonEntryPath`; plugin-manager exposes `respawn(packageName) = deactivate + activate`; `dev-watcher` watches the entry path on top of the existing UI bundle path and calls `respawn` on change. Plugin authors who write atomic-output build pipelines (esbuild watch → dist/index.mjs) get true hot reload without restarting the daemon — UI WebSocket stays up.
   - **Crash detection (M24.6).** Broker tells the difference between intentional shutdown (called `deactivate` first) and unexpected exit via a new `deactivating` set; the latter fires a `CrashObserver` callback. Plugin-manager subscribes, disposes all registry entries (agents/skills/views/cards) of the dead plugin, flips internal state (`isActivated → false`, `isCrashed → true`), and surfaces a `CrashedRecord` with the reason. `/api/plugins` reply gained `crashed` / `crashReason` / `crashedAt` fields; new `POST /api/plugins/reactivate` endpoint calls `respawn` (one button on the UI side covers both "the plugin crashed, restart it" and "I just edited code, restart it"). Daemon WebSocket broadcasts a `plugin.crashed` event when the manager flags a crash, so the UI can show a badge without polling.
@@ -169,11 +175,8 @@ Config path: `~/.sisyphus/plugins.config.json`
 
 ## What's next (TODO)
 
-1. **UI work for crash badge**: backend exposes `crashed` state via `/api/plugins` + `plugin.crashed` WS event; UI side needs to render a red badge + a "Reactivate" button calling `POST /api/plugins/reactivate`. Pure frontend task.
-2. **Assistant agent + LLM tool calling under broker**: the M24.2 smoke covers the wiring but doesn't actually drive an LLM. Worth running plugin-base.assistant against a real key to surface latency / streaming buffering issues.
-3. **spawnAgent over RPC**: needed by M14 fan-out. Right now `ctx.spawnAgent` throws in the child. Implementation: `host.spawnAgent` RPC → broker resolves owner plugin → recurses via `broker.invokeAgent` with source-tagged emit forwarding.
-4. **arm64 build**: `lipo` step is host-only; cross-compiling SEA needs a clean arm64 node binary. Add CI runners.
-5. **Publish `@sisyphus/kernel` to npm**: outside plugin authors need `import type { SisyphusPlugin }` — workspace dep blocks them.
+1. **Assistant agent + LLM tool calling under broker**: smokes cover the wiring but don't actually drive an LLM. Worth running plugin-base.assistant against a real key to surface latency / streaming buffering issues.
+2. **Publish `@sisyphus/kernel` to npm**: outside plugin authors need `import type { SisyphusPlugin }` — workspace dep blocks them.
 6. **Publish plugin-base + plugin-todo to npm**: marketplace install button currently fails on these because pacote can't resolve them outside the workspace.
 7. **Plugin storage upgrade**: SQLite or LevelDB instead of JSON files
 8. **UI auth flow**: Production auth for non-dev users (login/OAuth)

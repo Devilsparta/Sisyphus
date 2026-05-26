@@ -116,6 +116,7 @@ async function main(): Promise<void> {
     'agents returned',
     result.agents.map((a) => a.id).sort(),
     [
+      'plugin-hello.agent.fanout-time',
       'plugin-hello.agent.hello-bot',
       'plugin-hello.agent.long-runner',
       'plugin-hello.agent.skill-lister',

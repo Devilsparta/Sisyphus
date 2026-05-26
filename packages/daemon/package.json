@@ -13,8 +13,9 @@
     "test:smoke:broker": "node --import=tsx test/broker-smoke.mts",
     "test:smoke:migration": "node --import=tsx test/plugin-migration-smoke.mts",
     "test:smoke:lifecycle": "node --import=tsx test/lifecycle-smoke.mts",
+    "test:smoke:spawnagent": "node --import=tsx test/spawnagent-smoke.mts",
     "test:smoke:sea": "node --import=tsx test/sea-smoke.mts",
-    "test:smoke": "pnpm --filter @sisyphus/plugin-hello build && pnpm test:smoke:broker && pnpm test:smoke:migration && pnpm test:smoke:lifecycle && pnpm build:bin && pnpm test:smoke:sea"
+    "test:smoke": "pnpm --filter @sisyphus/plugin-hello build && pnpm test:smoke:broker && pnpm test:smoke:migration && pnpm test:smoke:lifecycle && pnpm test:smoke:spawnagent && pnpm build:bin && pnpm test:smoke:sea"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",

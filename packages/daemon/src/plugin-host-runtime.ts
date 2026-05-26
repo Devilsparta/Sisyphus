@@ -127,10 +127,10 @@ const collected: CollectedContributions = {
 };
 
 /**
- * In-flight agent runs, keyed by conversationId. Host sends an
- * `agent.cancel` notification on user abort; we look up the matching
- * AbortController and fire it. The plugin's agent.run is expected to
- * observe ctx.signal (most LLM SDKs already do) and unwind.
+ * In-flight agent runs, keyed by runId. Host sends an `agent.cancel`
+ * notification with the matching runId on user abort; we fire the
+ * AbortController. The plugin's agent.run is expected to observe
+ * ctx.signal (most LLM SDKs already do) and unwind.
  */
 const agentRuns = new Map<string, AbortController>();
 
@@ -287,6 +287,8 @@ interface InvokeAgentParams {
   userMessage: string;
   history: ChatMessage[];
   conversationId: string;
+  /** Unique id for this run; carried through agent.event notifications and used by agent.cancel routing. */
+  runId: string;
   /**
    * ACL-filtered snapshot of skills the host wants this agent to see in
    * querySkills(). Snapshotted at invoke time so the agent doesn't have
@@ -307,7 +309,7 @@ async function handleInvokeAgent(params: InvokeAgentParams): Promise<unknown> {
   }
 
   const ac = new AbortController();
-  agentRuns.set(params.conversationId, ac);
+  agentRuns.set(params.runId, ac);
 
   const availableSkills = params.availableSkills ?? [...collected.skills];
 
@@ -315,9 +317,13 @@ async function handleInvokeAgent(params: InvokeAgentParams): Promise<unknown> {
     conversationId: params.conversationId,
     history: params.history,
     emit(ev: AgentEvent) {
+      // Auto-tag source with this agent's id if the agent didn't set it
+      // itself (it might if it's re-emitting a sub-agent's event).
+      // Router-side sourcedEmit preserves the source we set here.
       notifyHost('agent.event', {
         conversationId: params.conversationId,
-        event: ev,
+        runId: params.runId,
+        event: { ...ev, source: ev.source ?? params.agentName },
       });
     },
     signal: ac.signal,
@@ -332,29 +338,36 @@ async function handleInvokeAgent(params: InvokeAgentParams): Promise<unknown> {
     querySkills() {
       return availableSkills;
     },
-    async spawnAgent(_agentId, _userMessage) {
-      // TODO M24.3: route through host.spawnAgent so the daemon picks the
-      // owner plugin and a sub-run is brokered with source-tagged events.
-      throw rpcError(
-        ERR.METHOD_NOT_FOUND,
-        'spawnAgent over RPC: not implemented yet',
-      );
+    async spawnAgent(subAgentId, subMessage) {
+      // Fire host.spawnAgent and let the broker resolve owner + drive the
+      // sub-run. Reply lands when the sub-agent's run completes (sub emits
+      // `done`); events stream back through agent.event notifications
+      // tagged with the sub-agent's source, going straight to the
+      // top-level emit registered for the parent run.
+      await callHost('host.spawnAgent', {
+        parentAgentId: params.agentName,
+        parentRunId: params.runId,
+        subAgentId,
+        subMessage,
+        conversationId: params.conversationId,
+        history: params.history,
+      });
     },
   };
 
   try {
     await agent.run(params.userMessage, runCtx);
   } finally {
-    agentRuns.delete(params.conversationId);
+    agentRuns.delete(params.runId);
   }
   return {};
 }
 
 interface CancelParams {
-  conversationId: string;
+  runId: string;
 }
 function handleCancelNotification(params: CancelParams): void {
-  const ac = agentRuns.get(params.conversationId);
+  const ac = agentRuns.get(params.runId);
   if (ac) ac.abort();
 }
 

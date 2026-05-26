@@ -8,15 +8,30 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$REPO_ROOT/src-tauri/target/release/bundle/macos/Sisyphus.app"
+# Caller can override target arch (default host).
+# Examples:
+#   bash scripts/make-dmg.sh                       # host arch from default target/release/
+#   TARGET=aarch64-apple-darwin bash scripts/make-dmg.sh
+#   TARGET=x86_64-apple-darwin bash scripts/make-dmg.sh
+TARGET="${TARGET:-}"
+if [ -n "$TARGET" ]; then
+  APP="$REPO_ROOT/src-tauri/target/${TARGET}/release/bundle/macos/Sisyphus.app"
+  case "$TARGET" in
+    aarch64-apple-darwin) DMG_ARCH=arm64 ;;
+    x86_64-apple-darwin)  DMG_ARCH=x64 ;;
+    *) DMG_ARCH="$TARGET" ;;
+  esac
+else
+  APP="$REPO_ROOT/src-tauri/target/release/bundle/macos/Sisyphus.app"
+  HOST_ARCH="$(uname -m)"
+  case "$HOST_ARCH" in
+    arm64) DMG_ARCH=arm64 ;;
+    x86_64) DMG_ARCH=x64 ;;
+    *) DMG_ARCH="$HOST_ARCH" ;;
+  esac
+fi
 VERSION="$(node -p "require('$REPO_ROOT/src-tauri/tauri.conf.json').version")"
-ARCH="$(uname -m)"
-case "$ARCH" in
-  arm64) DMG_ARCH=arm64 ;;
-  x86_64) DMG_ARCH=x64 ;;
-  *) DMG_ARCH="$ARCH" ;;
-esac
-DMG="$REPO_ROOT/src-tauri/target/release/bundle/macos/Sisyphus_${VERSION}_${DMG_ARCH}.dmg"
+DMG="$(dirname "$APP")/Sisyphus_${VERSION}_${DMG_ARCH}.dmg"
 
 if [ ! -d "$APP" ]; then
   echo "error: $APP not found — run \`pnpm tauri build\` first" >&2

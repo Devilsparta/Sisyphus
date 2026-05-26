@@ -15,7 +15,10 @@
  * /api/plugins/* routes don't have to know they're talking to subprocesses.
  */
 import type {
+  AgentEvent,
   AgentImpl,
+  AgentRunContext,
+  ChatMessage,
   Disposable,
   PluginManifest,
   SkillDescriptor,
@@ -79,6 +82,7 @@ export class PluginManager {
     broker.setCrashObserver((pkg, info) => {
       this.handleCrash(pkg, info);
     });
+    broker.setSpawnAgentHandler((p) => this.spawnSubAgent(p));
   }
 
   isActivated(packageName: string): boolean {
@@ -303,6 +307,81 @@ export class PluginManager {
    * router: skill in caller's namespace = OK, otherwise must be declared
    * in caller's `manifest.requires.skills`.
    */
+  /**
+   * Sub-agent spawn handler bridged from the broker. Routes the call to
+   * whichever plugin owns the target agent, sharing the caller's
+   * conversation + parent-emit so events flow inline.
+   *
+   * Source-tagging: the sub-agent's plugin-host runtime auto-tags emitted
+   * events with `source = subAgentId`. Parent's emit (re-used here as
+   * `sub-runCtx.emit`) preserves an already-set source, so the UI sees
+   * fan-out branches distinguished by source even though they all stream
+   * into the same conversation.
+   *
+   * No agent-side ACL in v1: any plugin that has another plugin's agent
+   * id can spawn it. Skill ACL still applies inside the sub-agent.
+   */
+  private async spawnSubAgent(params: {
+    callerPluginId: string;
+    parentAgentId: string;
+    parentRunId: string;
+    subAgentId: string;
+    subMessage: string;
+    conversationId: string;
+    history: ChatMessage[];
+  }): Promise<void> {
+    const parentEmit = this.broker.getEmitForRun(params.parentRunId);
+    if (!parentEmit) {
+      throw new Error(
+        `spawnAgent: no parent run registered for runId "${params.parentRunId}"`,
+      );
+    }
+
+    // Sub-agent's owner plugin lives under the namespace prefix of its id.
+    const dot = params.subAgentId.indexOf('.');
+    const ownerPluginId =
+      dot > 0 ? params.subAgentId.slice(0, dot) : params.subAgentId;
+    const record = this.registry.getPluginRecord(ownerPluginId);
+    if (!record) {
+      throw new Error(
+        `spawnAgent: target plugin "${ownerPluginId}" not registered`,
+      );
+    }
+    const ownerPackage = record.packageName;
+    if (!this.activated.has(ownerPackage)) {
+      throw new Error(
+        `spawnAgent: plugin "${ownerPackage}" not currently activated`,
+      );
+    }
+
+    const subAc = new AbortController();
+    const subRunCtx: AgentRunContext = {
+      conversationId: params.conversationId,
+      history: params.history,
+      emit: (ev: AgentEvent) => parentEmit(ev),
+      signal: subAc.signal,
+      // Sub-agent's own RPC ctx is built fresh inside the child process by
+      // plugin-host-runtime; the stubs we pass here are only invoked if
+      // some daemon-side code calls them directly (it doesn't).
+      invokeSkill: async () => {
+        throw new Error(
+          'invokeSkill is only available inside the plugin process, not the daemon shim',
+        );
+      },
+      querySkills: () => [],
+      spawnAgent: async () => {
+        throw new Error('nested spawnAgent must originate from the plugin');
+      },
+    };
+
+    await this.broker.invokeAgent(
+      ownerPackage,
+      params.subAgentId,
+      subRunCtx,
+      params.subMessage,
+    );
+  }
+
   /**
    * Returns the skills the caller plugin is allowed to invoke — its own
    * namespace plus whatever `manifest.requires.skills` opts in to. Same

@@ -22,6 +22,10 @@ interface PluginInfo {
   packageName: string;
   enabled: boolean;
   activated: boolean;
+  /** True iff the plugin's child process exited unexpectedly (M24.6). */
+  crashed: boolean;
+  crashReason: string | null;
+  crashedAt: number | null;
   id: string | null;
   displayName: string | null;
   version: string | null;
@@ -134,6 +138,23 @@ export default function SettingsView() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Light polling so the crashed badge appears without a manual refresh.
+  // Only re-fetches /api/plugins — the heavy load (config / workspace /
+  // marketplace) stays on demand.
+  useEffect(() => {
+    const handle = setInterval(async () => {
+      try {
+        const res = await fetch('/api/plugins');
+        if (!res.ok) return;
+        const next = (await res.json()) as PluginInfo[];
+        setPlugins(next);
+      } catch {
+        // network glitch — keep last good list
+      }
+    }, 3000);
+    return () => clearInterval(handle);
+  }, []);
 
   useEffect(() => {
     if (!workspace && scope === 'project') setScope('user');
@@ -353,19 +374,52 @@ export default function SettingsView() {
                           {p.version && (
                             <span className="ml-2">v{p.version}</span>
                           )}
-                          {p.activated && (
+                          {p.activated && !p.crashed && (
                             <span className="ml-2 text-foreground">
                               · active
                             </span>
                           )}
-                          {p.enabled && !p.activated && (
+                          {p.crashed && (
+                            <span
+                              className="ml-2 text-destructive"
+                              title={p.crashReason ?? undefined}
+                            >
+                              · crashed
+                            </span>
+                          )}
+                          {p.enabled && !p.activated && !p.crashed && (
                             <span className="ml-2 text-destructive">
                               · enabled, not activated
                             </span>
                           )}
                         </div>
+                        {p.crashed && p.crashReason && (
+                          <div
+                            className="mt-1 truncate text-xs text-destructive"
+                            title={p.crashReason}
+                          >
+                            {p.crashReason}
+                          </div>
+                        )}
                       </div>
                       <div className="flex shrink-0 gap-1">
+                        {p.crashed && (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            disabled={busyOnThis}
+                            onClick={() =>
+                              pluginRequest(
+                                '/api/plugins/reactivate',
+                                { packageName: key },
+                                `reactivate ${key}`,
+                                `Reactivated ${key}`,
+                              )
+                            }
+                          >
+                            Reactivate
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant={p.enabled ? 'secondary' : 'outline'}

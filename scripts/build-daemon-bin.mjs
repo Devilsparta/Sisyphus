@@ -25,6 +25,9 @@ import {
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
+import https from "node:https";
+import { pipeline } from "node:stream/promises";
+import { createWriteStream } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
@@ -64,13 +67,94 @@ function run(label, cmd, args, opts = {}) {
 }
 
 const rustc = resolveRustc();
-const triple = hostTriple(rustc);
+const hostTripleStr = hostTriple(rustc);
+// SISYPHUS_TARGET_TRIPLE lets the caller cross-build for another arch
+// (e.g. aarch64-apple-darwin from an Intel mac). Default = host triple.
+const triple = process.env.SISYPHUS_TARGET_TRIPLE ?? hostTripleStr;
 const isMacOS = process.platform === "darwin";
 const isWindows = process.platform === "win32";
 const binName = isWindows
   ? `sisyphus-daemon-${triple}.exe`
   : `sisyphus-daemon-${triple}`;
 const outfile = resolve(outDir, binName);
+const isCrossBuild = triple !== hostTripleStr;
+
+// Map our rust target triple to the nodejs.org darwin distribution arch label.
+function nodejsArchFor(triple) {
+  if (triple === "x86_64-apple-darwin") return "x64";
+  if (triple === "aarch64-apple-darwin") return "arm64";
+  return null;
+}
+
+/**
+ * Download and cache nodejs.org's single-arch node binary for the given
+ * target. Returns absolute path to a node binary matching `process.version`
+ * (so the SEA blob format lines up). Skips download if already cached.
+ */
+async function fetchTargetNodeBinary(targetTriple) {
+  const arch = nodejsArchFor(targetTriple);
+  if (!arch) {
+    throw new Error(
+      `Cross-build for triple ${targetTriple} not supported yet (no nodejs.org tarball known)`,
+    );
+  }
+  const version = process.version; // e.g. "v24.14.1"
+  const cacheRoot = resolve(os.homedir(), ".cache/sisyphus-build");
+  const distName = `node-${version}-darwin-${arch}`;
+  const cacheDir = resolve(cacheRoot, distName);
+  const nodeBin = resolve(cacheDir, "bin/node");
+
+  if (existsSync(nodeBin)) {
+    console.log(`[build-daemon-bin] cached target node binary: ${nodeBin}`);
+    return nodeBin;
+  }
+
+  const url = `https://nodejs.org/dist/${version}/${distName}.tar.gz`;
+  const tarPath = resolve(cacheRoot, `${distName}.tar.gz`);
+  mkdirSync(cacheRoot, { recursive: true });
+
+  console.log(`[build-daemon-bin] downloading ${url}`);
+  await new Promise((resolveDl, rejectDl) => {
+    https
+      .get(url, (res) => {
+        if (res.statusCode === 302 || res.statusCode === 301) {
+          // follow redirect once
+          https
+            .get(res.headers.location, (r2) => {
+              if (r2.statusCode !== 200) {
+                rejectDl(new Error(`HTTP ${r2.statusCode} on redirect ${url}`));
+                return;
+              }
+              pipeline(r2, createWriteStream(tarPath)).then(resolveDl, rejectDl);
+            })
+            .on("error", rejectDl);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          rejectDl(new Error(`HTTP ${res.statusCode} fetching ${url}`));
+          return;
+        }
+        pipeline(res, createWriteStream(tarPath)).then(resolveDl, rejectDl);
+      })
+      .on("error", rejectDl);
+  });
+
+  console.log(`[build-daemon-bin] extracting ${tarPath}`);
+  const tarR = spawnSync(
+    "tar",
+    ["-xzf", tarPath, "-C", cacheRoot],
+    { stdio: "inherit" },
+  );
+  if (tarR.status !== 0) {
+    throw new Error(`tar extract failed (exit ${tarR.status})`);
+  }
+  rmSync(tarPath);
+
+  if (!existsSync(nodeBin)) {
+    throw new Error(`extracted tarball missing bin/node at ${nodeBin}`);
+  }
+  return nodeBin;
+}
 
 console.log(`[build-daemon-bin] node=${process.execPath} (${process.version})`);
 console.log(`[build-daemon-bin] triple=${triple}`);
@@ -114,32 +198,45 @@ run("SEA blob", process.execPath, [
   seaConfigPath,
 ]);
 
-// 3. Copy the host node binary to the sidecar path Tauri expects. On macOS
-//    nodejs.org ships a universal binary; postject can't inject into a fat
-//    macho because the SEA sentinel appears in every slice. Thin it down to
-//    the host arch first.
+// 3. Copy the right node binary to the sidecar path Tauri expects.
+//    - Native build, host node is a universal binary: lipo -thin the host
+//      arch (nodejs.org's macOS install ships universal; postject can't
+//      inject into a fat macho because the sentinel appears in every slice).
+//    - Native build, host node already single-arch: copy as-is.
+//    - Cross build (SISYPHUS_TARGET_TRIPLE != host): download the
+//      single-arch nodejs.org darwin-arm64 (or x64) tarball matching
+//      process.version, copy from there.
 if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
 try {
   rmSync(outfile);
 } catch {
   // not present, fine
 }
-if (isMacOS) {
+
+let sourceNode = process.execPath;
+if (isCrossBuild) {
+  console.log(
+    `[build-daemon-bin] cross-build host=${hostTripleStr} target=${triple}`,
+  );
+  sourceNode = await fetchTargetNodeBinary(triple);
+}
+
+if (isMacOS && !isCrossBuild) {
   const archForLipo = triple.startsWith("aarch64") ? "arm64" : "x86_64";
-  const fileOut = execFileSync("file", [process.execPath], { encoding: "utf8" });
+  const fileOut = execFileSync("file", [sourceNode], { encoding: "utf8" });
   if (fileOut.includes("universal binary")) {
     run("lipo thin", "lipo", [
-      process.execPath,
+      sourceNode,
       "-thin",
       archForLipo,
       "-output",
       outfile,
     ]);
   } else {
-    copyFileSync(process.execPath, outfile);
+    copyFileSync(sourceNode, outfile);
   }
 } else {
-  copyFileSync(process.execPath, outfile);
+  copyFileSync(sourceNode, outfile);
 }
 chmodSync(outfile, 0o755);
 
