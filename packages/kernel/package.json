@@ -1,20 +1,64 @@
 {
   "name": "@sisyphus/kernel",
   "version": "0.1.0",
-  "private": true,
-  "description": "Sisyphus kernel — shared plugin contracts (types only in M0).",
+  "description": "Sisyphus kernel — shared plugin contracts (types) and UI runtime registries. The contract surface every Sisyphus plugin imports.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Devilsparta/Sisyphus.git",
+    "directory": "packages/kernel"
+  },
+  "homepage": "https://github.com/Devilsparta/Sisyphus#readme",
+  "keywords": [
+    "sisyphus",
+    "sisyphus-plugin-sdk",
+    "ai",
+    "plugin-system"
+  ],
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./ui": "./src/ui.ts"
+    "./ui": "./src/ui.ts",
+    "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepublishOnly": "pnpm build"
+  },
+  "peerDependencies": {
+    "react": "^18 || ^19"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^18.3.0",
     "typescript": "^5"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./ui": {
+        "types": "./dist/ui.d.ts",
+        "default": "./dist/ui.js"
+      },
+      "./package.json": "./package.json"
+    }
   }
 }

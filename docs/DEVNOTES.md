@@ -86,6 +86,7 @@ Config: `packages/daemon/.env.local` (OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MO
 | M24.5 | Dev hot reload via broker.respawn (daemon-entry fs watch) | 05-26 |
 | M24.6 | Crashed plugin state — manager disposes, WS broadcast, /api/plugins reactivate | 05-26 |
 | M24.7 | spawnAgent over RPC (cross-process fan-out) + arm64 cross-build + UI crash badge | 05-26 |
+| M25.1 | @sisyphus/kernel publish prep (dist emit + publishConfig dual-mode + README) | 05-27 |
 
 ## Key files to know
 
@@ -133,7 +134,17 @@ Config path: `~/.sisyphus/plugins.config.json`
 
 ## What just happened (most recent work)
 
-**Today (2026-05-26):**
+**Today (2026-05-27):**
+- M25.1: `@sisyphus/kernel` ready for npm publish (scope `@sisyphus` is free; verified via `npm view`).
+  - `packages/kernel/tsconfig.build.json` emits `.js` + `.d.ts` + sourcemaps to `dist/`.
+  - `package.json` keeps `main = ./src/index.ts` for dev (tsx workspace resolution unchanged); a `publishConfig` block overrides `main` / `types` / `exports` to point at `./dist/...` only inside the published tarball. Verified by `pnpm pack --pack-destination /tmp` + inspecting the package.json inside the .tgz — it has dist paths, while the in-tree file still has src paths.
+  - Removed `private: true`, added `license: MIT`, `repository`, `homepage`, `keywords: ["sisyphus-plugin-sdk", …]`, `publishConfig.access: public`, peer dep `react: ^18 || ^19` (optional).
+  - `prepublishOnly` hook runs `pnpm build` so a stale dist can't sneak into a publish.
+  - `packages/kernel/README.md` written; will be the npm landing page.
+  - Daemon dev mode verified still boots (`pnpm --filter daemon start` → `/health` 200) — no regression from the package shape change.
+  - Next step (manual): `npm login` → `cd packages/kernel && pnpm publish` (or `pnpm -F @sisyphus/kernel publish` from root). Once on npm, `plugin-base` / `plugin-todo` can publish too and the marketplace install button will start working for the reference plugins.
+
+**Yesterday (2026-05-26):**
 - M24.7: three remaining items closed.
   - **UI crash badge**: plugin-base settings view extended — PluginInfo carries `crashed`/`crashReason`/`crashedAt`, the panel shows a red "· crashed" badge + the reason inline, and a "Reactivate" button that hits `POST /api/plugins/reactivate`. Plus a 3s poll so the badge surfaces without a manual refresh.
   - **spawnAgent over RPC**: `host.spawnAgent` notification + dispatch. Each `broker.invokeAgent` now generates a UUID `runId`; agent.event notifications carry the runId, broker.agentEmits indexes by runId (instead of conversationId) so concurrent runs in the same conversation don't trample each other's emit. Plugin-host runtime auto-tags `event.source = agentName` if unset, router's existing source-preservation does the rest. `plugin-manager.spawnSubAgent` reads `broker.getEmitForRun(parentRunId)` to wire the sub-agent's emit straight back into the parent's emit chain. Verified by new `spawnagent-smoke.mts`: plugin-hello has a `fanout-time` agent that spawns plugin-base's `time-helper` (in another process), parent + sub events both stream into the same emit with correct source tags and sub-done lands before parent-done.
