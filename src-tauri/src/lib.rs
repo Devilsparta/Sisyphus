@@ -15,9 +15,9 @@
 //     for .app/.dmg distribution and the default when `cargo tauri dev`
 //     has copied the externalBin into `target/{debug,release}/`.
 //   - Fall back to `src-tauri/binaries/sisyphus-daemon-<triple>` for
-//     when the binary was built via `pnpm --filter @sisyphus/daemon
+//     when the binary was built via `pnpm --filter @sisylabs/daemon
 //     build:bin` but not yet picked up by tauri's build pipeline.
-//   - Fall back to `pnpm --filter @sisyphus/daemon start` so fresh
+//   - Fall back to `pnpm --filter @sisylabs/daemon start` so fresh
 //     clones can still `cargo tauri dev` without running build:bin
 //     first.
 //
@@ -144,11 +144,11 @@ fn spawn_daemon(app: &App) -> std::io::Result<Child> {
     }
 
     log::info!(
-        "[sisyphus] no sidecar found; falling back to `pnpm --filter @sisyphus/daemon start` at {}",
+        "[sisyphus] no sidecar found; falling back to `pnpm --filter @sisylabs/daemon start` at {}",
         cwd.display()
     );
     let mut cmd = Command::new("pnpm");
-    cmd.args(["--filter", "@sisyphus/daemon", "start"])
+    cmd.args(["--filter", "@sisylabs/daemon", "start"])
         .current_dir(&cwd)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());

@@ -13,7 +13,7 @@
  * The loader catches these per-plugin so a misconfigured plugin is skipped
  * without poisoning the rest.
  */
-import type { SisyphusPlugin } from '@sisyphus/kernel';
+import type { SisyphusPlugin } from '@sisylabs/kernel';
 
 export function topoSortPlugins(plugins: SisyphusPlugin[]): SisyphusPlugin[] {
   const byId = new Map<string, SisyphusPlugin>();

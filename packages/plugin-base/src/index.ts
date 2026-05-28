@@ -1,5 +1,5 @@
 /**
- * @sisyphus/plugin-base — the reference plugin.
+ * @sisylabs/plugin-base — the reference plugin.
  *
  * Contributes:
  *   - react-designer agent (LLM-driven, generates jsx)
@@ -9,7 +9,7 @@
  *
  * The daemon entry stays React-free.
  */
-import type { SisyphusPlugin } from '@sisyphus/kernel';
+import type { SisyphusPlugin } from '@sisylabs/kernel';
 import { reactDesignerAgent } from './agents/react-designer';
 import { timeHelperAgent } from './agents/time-helper';
 import { assistantAgent } from './agents/assistant';

@@ -3,8 +3,8 @@
  *
  * Schema (M19):
  *   {
- *     "installed": ["@sisyphus/plugin-base", "..."],
- *     "enabled":   ["@sisyphus/plugin-base"]
+ *     "installed": ["@sisylabs/plugin-base", "..."],
+ *     "enabled":   ["@sisylabs/plugin-base"]
  *   }
  *
  * Legacy schema (M9, M10):

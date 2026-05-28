@@ -5,7 +5,7 @@
  * time-helper agent below to exercise the full tool_call / tool_result
  * round-trip end to end.
  */
-import type { SkillDescriptor, SkillHandler } from '@sisyphus/kernel';
+import type { SkillDescriptor, SkillHandler } from '@sisylabs/kernel';
 
 export const currentTimeSkill: SkillDescriptor = {
   id: 'plugin-base.skill.current-time',

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { getProviders } from '@sisyphus/kernel/ui';
+import { getProviders } from '@sisylabs/kernel/ui';
 
 /**
  * Nests every plugin-contributed provider around `children`, outermost first

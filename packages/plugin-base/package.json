@@ -1,5 +1,5 @@
 {
-  "name": "@sisyphus/plugin-base",
+  "name": "@sisylabs/plugin-base",
   "version": "0.1.0",
   "private": true,
   "description": "Reference plugin: react-designer agent + chat/canvas views.",
@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@codesandbox/sandpack-react": "^2.20.0",
-    "@sisyphus/kernel": "workspace:*",
+    "@sisylabs/kernel": "workspace:*",
     "clsx": "^2.1.1",
     "openai": "^6.33.0",
     "tailwind-merge": "^3.5.0"

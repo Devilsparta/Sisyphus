@@ -13,7 +13,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import type { SisyphusPlugin } from '@sisyphus/kernel';
+import type { SisyphusPlugin } from '@sisylabs/kernel';
 import { pluginInstallDir } from './plugin-installer';
 
 export interface LoadedPlugin {

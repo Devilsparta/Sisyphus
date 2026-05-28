@@ -10,7 +10,7 @@
  * `done <text>` / `clear` / `list`. Always emits a full task-list card so
  * the UI mirrors the latest state.
  */
-import type { AgentImpl } from '@sisyphus/kernel';
+import type { AgentImpl } from '@sisylabs/kernel';
 import { store } from '../store';
 
 export const todoManagerAgent: AgentImpl = {

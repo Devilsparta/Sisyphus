@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "http://localhost:8787",
     "devUrl": "http://localhost:8787",
-    "beforeBuildCommand": "pnpm --filter @sisyphus/ui build && pnpm --filter @sisyphus/daemon build:bin"
+    "beforeBuildCommand": "pnpm --filter @sisylabs/ui build && pnpm --filter @sisylabs/daemon build:bin"
   },
   "app": {
     "windows": [

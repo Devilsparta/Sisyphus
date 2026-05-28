@@ -1,5 +1,5 @@
 {
-  "name": "@sisyphus/daemon",
+  "name": "@sisylabs/daemon",
   "version": "0.1.0",
   "private": true,
   "description": "Sisyphus daemon — Node process hosting plugins and serving HTTP+WS API.",
@@ -15,11 +15,11 @@
     "test:smoke:lifecycle": "node --import=tsx test/lifecycle-smoke.mts",
     "test:smoke:spawnagent": "node --import=tsx test/spawnagent-smoke.mts",
     "test:smoke:sea": "node --import=tsx test/sea-smoke.mts",
-    "test:smoke": "pnpm --filter @sisyphus/plugin-hello build && pnpm test:smoke:broker && pnpm test:smoke:migration && pnpm test:smoke:lifecycle && pnpm test:smoke:spawnagent && pnpm build:bin && pnpm test:smoke:sea"
+    "test:smoke": "pnpm --filter @sisylabs/plugin-hello build && pnpm test:smoke:broker && pnpm test:smoke:migration && pnpm test:smoke:lifecycle && pnpm test:smoke:spawnagent && pnpm build:bin && pnpm test:smoke:sea"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
-    "@sisyphus/kernel": "workspace:*",
+    "@sisylabs/kernel": "workspace:*",
     "dotenv": "^16.4.5",
     "hono": "^4.6.0",
     "openai": "^6.33.0",
@@ -27,9 +27,9 @@
     "ws": "^8.20.1"
   },
   "devDependencies": {
-    "@sisyphus/plugin-base": "workspace:*",
-    "@sisyphus/plugin-hello": "workspace:*",
-    "@sisyphus/plugin-todo": "workspace:*",
+    "@sisylabs/plugin-base": "workspace:*",
+    "@sisylabs/plugin-hello": "workspace:*",
+    "@sisylabs/plugin-todo": "workspace:*",
     "@types/node": "^20",
     "@types/pacote": "^11.1.8",
     "@types/ws": "^8.18.1",

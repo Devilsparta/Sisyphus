@@ -27,7 +27,7 @@ import type {
   AgentImpl,
   ChatMessage,
   PluginManifest,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 import OpenAI from 'openai';
 import type { Registry } from './registry';
 

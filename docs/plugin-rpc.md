@@ -6,7 +6,7 @@
 
 This document specifies how the daemon (the *host*) talks to each plugin's
 *child process*. Plugin authors do not write this protocol directly — the
-`@sisyphus/plugin-sdk` package implements it on the plugin side. This doc
+`@sisylabs/plugin-sdk` package implements it on the plugin side. This doc
 is the contract between SDK and host.
 
 ## Transport

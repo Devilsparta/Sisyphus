@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { KernelEvents } from '@sisyphus/kernel';
+import { KernelEvents } from '@sisylabs/kernel';
 import App from './App';
 import { loadAllPluginUI } from './plugin-loader';
 import { ws } from './services/ws-client';

@@ -10,8 +10,8 @@
  * package would.
  *
  * Pre-reqs (the script checks for them and fails loudly):
- *   1. `pnpm --filter @sisyphus/daemon build:bin`
- *   2. `pnpm --filter @sisyphus/plugin-hello build`
+ *   1. `pnpm --filter @sisylabs/daemon build:bin`
+ *   2. `pnpm --filter @sisylabs/plugin-hello build`
  */
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -22,7 +22,7 @@ import type {
   AgentEvent,
   AgentRunContext,
   ChatMessage,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 import { PluginBroker } from '../src/plugin-broker.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -51,14 +51,14 @@ const pluginHelloDist = path.join(
 if (!existsSync(seaBinary)) {
   console.error(
     `[sea-smoke] SEA binary not found at ${seaBinary}\n` +
-      `[sea-smoke] run \`pnpm --filter @sisyphus/daemon build:bin\` first`,
+      `[sea-smoke] run \`pnpm --filter @sisylabs/daemon build:bin\` first`,
   );
   process.exit(1);
 }
 if (!existsSync(pluginHelloDist)) {
   console.error(
     `[sea-smoke] plugin-hello bundle not found at ${pluginHelloDist}\n` +
-      `[sea-smoke] run \`pnpm --filter @sisyphus/plugin-hello build\` first`,
+      `[sea-smoke] run \`pnpm --filter @sisylabs/plugin-hello build\` first`,
   );
   process.exit(1);
 }
@@ -66,7 +66,7 @@ if (!existsSync(pluginHelloDist)) {
 console.log(`[sea-smoke] SEA binary:   ${seaBinary}`);
 console.log(`[sea-smoke] plugin entry: ${pluginHelloDist}`);
 
-const HELLO = '@sisyphus/plugin-hello';
+const HELLO = '@sisylabs/plugin-hello';
 
 function assertEq<T>(label: string, actual: T, expected: T): void {
   const a = JSON.stringify(actual);

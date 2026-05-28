@@ -15,7 +15,7 @@ import type {
   IPCEvent,
   IPCMessage,
   IPCResponse,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 
 const WS_PATH = '/ws';
 

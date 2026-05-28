@@ -27,7 +27,7 @@ import {
   type SkillDescriptor,
   type SkillHandler,
   type ViewDescriptor,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 import { bus } from './event-bus';
 
 interface SkillEntry {

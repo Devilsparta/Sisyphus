@@ -1,5 +1,5 @@
 /**
- * @sisyphus/plugin-hello — minimal test fixture for the M24 broker.
+ * @sisylabs/plugin-hello — minimal test fixture for the M24 broker.
  *
  * One skill (echo), one agent (hello-bot) that yields three tokens then
  * `done`. Used by daemon's broker smoke test to exercise init/activate/
@@ -10,7 +10,7 @@ import type {
   SisyphusPlugin,
   SkillDescriptor,
   SkillHandler,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 
 const echoSkill: SkillDescriptor = {
   id: 'plugin-hello.skill.echo',

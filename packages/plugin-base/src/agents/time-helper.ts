@@ -13,7 +13,7 @@
  * registry → handler → back to agent.
  */
 import { randomUUID } from 'node:crypto';
-import type { AgentImpl } from '@sisyphus/kernel';
+import type { AgentImpl } from '@sisylabs/kernel';
 
 const SKILL_ID = 'plugin-base.skill.current-time';
 

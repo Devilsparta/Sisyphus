@@ -1,13 +1,13 @@
 /**
- * @sisyphus/kernel/ui — UI-side runtime registries.
+ * @sisylabs/kernel/ui — UI-side runtime registries.
  *
  * These maps live in browser-loaded code only. They're in the kernel package
  * (not the ui package) so plugins can register renderers without depending on
- * `@sisyphus/ui` — which would create a cycle, since the ui package depends
+ * `@sisylabs/ui` — which would create a cycle, since the ui package depends
  * on plugins for their UI bundles.
  *
  * React is `import type`-only — TypeScript strips it from emit, so the
- * daemon's `@sisyphus/kernel` entry stays React-runtime-free.
+ * daemon's `@sisylabs/kernel` entry stays React-runtime-free.
  */
 import type { ComponentType, ReactNode } from 'react';
 import type { Region, ViewDescriptor } from './index';

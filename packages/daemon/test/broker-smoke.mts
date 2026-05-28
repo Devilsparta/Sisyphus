@@ -2,7 +2,7 @@
 /**
  * M24.1 vertical slice smoke test.
  *
- * Spawns @sisyphus/plugin-hello in a child process via the broker,
+ * Spawns @sisylabs/plugin-hello in a child process via the broker,
  * exercises the host→plugin RPC surface end to end:
  *
  *   1. init handshake
@@ -20,13 +20,13 @@ import type {
   AgentEvent,
   AgentRunContext,
   ChatMessage,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 import { PluginBroker } from '../src/plugin-broker.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const daemonEntry = path.resolve(__dirname, '../src/index.ts');
 
-const HELLO = '@sisyphus/plugin-hello';
+const HELLO = '@sisylabs/plugin-hello';
 
 function assertEq<T>(label: string, actual: T, expected: T): void {
   const a = JSON.stringify(actual);

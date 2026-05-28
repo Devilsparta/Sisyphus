@@ -35,7 +35,7 @@ import type {
   SkillDescriptor,
   SkillHandler,
   ViewDescriptor,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 
 const API_VERSION = 1;
 const SDK_VERSION = '0.1.0';

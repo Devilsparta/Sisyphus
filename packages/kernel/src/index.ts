@@ -1,5 +1,5 @@
 /**
- * @sisyphus/kernel — shared plugin contracts.
+ * @sisylabs/kernel — shared plugin contracts.
  *
  * Single source of truth for daemon ↔ UI ↔ plugin types.
  *
@@ -223,7 +223,7 @@ export interface PluginManifest {
    * ESM bundle exporting the plugin's UI surface (views, cardRenderers,
    * providers). The daemon serves this file at
    * GET /api/plugins/<id>/ui.mjs so the UI can `await import()` it at
-   * runtime — no static UI-side `import '@sisyphus/plugin-x/ui'`
+   * runtime — no static UI-side `import '@sisylabs/plugin-x/ui'`
    * needed in production.
    *
    * Default: "./dist/ui.mjs" when unset.

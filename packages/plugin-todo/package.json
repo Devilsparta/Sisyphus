@@ -1,5 +1,5 @@
 {
-  "name": "@sisyphus/plugin-todo",
+  "name": "@sisylabs/plugin-todo",
   "version": "0.1.0",
   "private": true,
   "description": "Second reference plugin: simple todo manager (rule-based agent, no LLM). Exists to compress-test the extension surface — multi-agent routing, custom card payloads, side-region views.",
@@ -35,7 +35,7 @@
     "dev": "node build-ui.mjs --watch"
   },
   "dependencies": {
-    "@sisyphus/kernel": "workspace:*"
+    "@sisylabs/kernel": "workspace:*"
   },
   "peerDependencies": {
     "react": "^18"

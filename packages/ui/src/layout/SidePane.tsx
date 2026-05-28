@@ -1,4 +1,4 @@
-import { getView } from '@sisyphus/kernel/ui';
+import { getView } from '@sisylabs/kernel/ui';
 
 interface SidePaneProps {
   activeViewId: string | null;

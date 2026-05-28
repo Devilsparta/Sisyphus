@@ -22,7 +22,7 @@ import { Registry } from '../src/registry.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const daemonEntry = path.resolve(__dirname, '../src/index.ts');
 
-const HELLO = '@sisyphus/plugin-hello';
+const HELLO = '@sisylabs/plugin-hello';
 
 function assertEq<T>(label: string, actual: T, expected: T): void {
   const a = JSON.stringify(actual);

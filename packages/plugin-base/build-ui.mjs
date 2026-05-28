@@ -9,7 +9,7 @@
  *   - react, react-dom, react-dom/client, react/jsx-runtime
  *     The host owns the React instance; we must not bundle our own or
  *     hooks break across the module boundary.
- *   - @sisyphus/kernel, @sisyphus/kernel/ui
+ *   - @sisylabs/kernel, @sisylabs/kernel/ui
  *     Shared contracts + UI runtime registries — the host already has
  *     them, no point duplicating.
  *
@@ -34,8 +34,8 @@ const config = {
     'react-dom',
     'react-dom/client',
     'react/jsx-runtime',
-    '@sisyphus/kernel',
-    '@sisyphus/kernel/ui',
+    '@sisylabs/kernel',
+    '@sisylabs/kernel/ui',
   ],
   sourcemap: true,
   minify: false,

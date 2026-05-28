@@ -1,5 +1,5 @@
 {
-  "name": "@sisyphus/kernel",
+  "name": "@sisylabs/kernel",
   "version": "0.1.0",
   "description": "Sisyphus kernel — shared plugin contracts (types) and UI runtime registries. The contract surface every Sisyphus plugin imports.",
   "license": "MIT",

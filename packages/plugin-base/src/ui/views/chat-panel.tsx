@@ -5,8 +5,8 @@ import {
   useCallback,
   type FormEvent,
 } from 'react';
-import type { AgentEvent, CardInstance } from '@sisyphus/kernel';
-import { getCardRenderer } from '@sisyphus/kernel/ui';
+import type { AgentEvent, CardInstance } from '@sisylabs/kernel';
+import { getCardRenderer } from '@sisylabs/kernel/ui';
 import { Button } from '../components/button';
 import { Input } from '../components/input';
 import { ScrollArea } from '../components/scroll-area';

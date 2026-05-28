@@ -3,7 +3,7 @@
  * M24.3 plugin migration smoke test.
  *
  * Brings up the broker + plugin-manager + central Registry, activates the
- * two real reference plugins (@sisyphus/plugin-base, @sisyphus/plugin-todo)
+ * two real reference plugins (@sisylabs/plugin-base, @sisylabs/plugin-todo)
  * the same way the daemon does at boot, then exercises:
  *
  *   1. plugin-base: activate → Registry sees its three agents and the
@@ -29,7 +29,7 @@ import type {
   AgentEvent,
   AgentRunContext,
   ChatMessage,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 import { PluginBroker } from '../src/plugin-broker.js';
 import { PluginManager } from '../src/plugin-manager.js';
 import { Registry } from '../src/registry.js';
@@ -91,9 +91,9 @@ async function main(): Promise<void> {
   await fs.rm(TODO_STORAGE_FILE, { force: true });
 
   // ── Step 1: activate plugin-base ─────────────────────────────────────────
-  console.log('[smoke] step 1: activate @sisyphus/plugin-base');
+  console.log('[smoke] step 1: activate @sisylabs/plugin-base');
   const ctx1 = makeBroker();
-  const baseActivation = await ctx1.pm.activate('@sisyphus/plugin-base');
+  const baseActivation = await ctx1.pm.activate('@sisylabs/plugin-base');
   assertEq('plugin-base manifest.id', baseActivation.manifest.id, 'plugin-base');
   const baseAgents = ctx1.registry
     .queryAgents()
@@ -148,8 +148,8 @@ async function main(): Promise<void> {
   assertEq('agent done reason', doneEv.reason, 'stop');
 
   // ── Step 3: activate plugin-todo ─────────────────────────────────────────
-  console.log('[smoke] step 3: activate @sisyphus/plugin-todo');
-  const todoActivation = await ctx1.pm.activate('@sisyphus/plugin-todo');
+  console.log('[smoke] step 3: activate @sisylabs/plugin-todo');
+  const todoActivation = await ctx1.pm.activate('@sisylabs/plugin-todo');
   assertEq('plugin-todo manifest.id', todoActivation.manifest.id, 'plugin-todo');
   const todoAgents = ctx1.registry
     .queryAgents()
@@ -188,8 +188,8 @@ async function main(): Promise<void> {
 
   // ── Step 5: deactivate both, then verify storage persisted across a fresh broker ─
   console.log('[smoke] step 5: deactivate, then re-activate from fresh broker');
-  await ctx1.pm.deactivate('@sisyphus/plugin-todo');
-  await ctx1.pm.deactivate('@sisyphus/plugin-base');
+  await ctx1.pm.deactivate('@sisylabs/plugin-todo');
+  await ctx1.pm.deactivate('@sisylabs/plugin-base');
 
   // Read the storage file directly to confirm it's actually on disk.
   const persisted = JSON.parse(
@@ -201,7 +201,7 @@ async function main(): Promise<void> {
 
   // Fresh broker + manager — onActivate should re-hydrate from disk.
   const ctx2 = makeBroker();
-  await ctx2.pm.activate('@sisyphus/plugin-todo');
+  await ctx2.pm.activate('@sisylabs/plugin-todo');
   const todoAgent2 = ctx2.registry.getAgent('plugin-todo.agent.todo-manager');
   if (!todoAgent2) throw new Error('todo-manager not in registry (round 2)');
   const list2Events: AgentEvent[] = [];
@@ -217,7 +217,7 @@ async function main(): Promise<void> {
   assertEq('after restart: task count', list2Payload.tasks.length, 1);
   assertEq('after restart: task text', list2Payload.tasks[0].text, 'buy milk');
 
-  await ctx2.pm.deactivate('@sisyphus/plugin-todo');
+  await ctx2.pm.deactivate('@sisylabs/plugin-todo');
 
   // Cleanup
   await fs.rm(TODO_STORAGE_FILE, { force: true });

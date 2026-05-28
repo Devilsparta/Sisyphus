@@ -1,10 +1,10 @@
 /**
- * @sisyphus/plugin-todo — the M3 second-plugin probe, with M4 persistence.
+ * @sisylabs/plugin-todo — the M3 second-plugin probe, with M4 persistence.
  *
  * Daemon entry. The store hooks ctx.storage during onActivate so the task
  * list survives restarts.
  */
-import type { SisyphusPlugin } from '@sisyphus/kernel';
+import type { SisyphusPlugin } from '@sisylabs/kernel';
 import { todoManagerAgent } from './agents/todo-manager';
 import { store } from './store';
 

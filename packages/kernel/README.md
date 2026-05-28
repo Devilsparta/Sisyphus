@@ -1,14 +1,14 @@
-# @sisyphus/kernel
+# @sisylabs/kernel
 
 Shared plugin contracts for the [Sisyphus](https://github.com/Devilsparta/Sisyphus) AI-native VSCode platform. Every Sisyphus plugin imports types from here; that's the whole point of the package.
 
 ## Install
 
 ```bash
-npm install --save-dev @sisyphus/kernel
+npm install --save-dev @sisylabs/kernel
 ```
 
-Most of what you'll use are `import type` declarations — the package emits a tiny amount of runtime code only for the UI registries (`@sisyphus/kernel/ui`), and `KernelEvents` constants.
+Most of what you'll use are `import type` declarations — the package emits a tiny amount of runtime code only for the UI registries (`@sisylabs/kernel/ui`), and `KernelEvents` constants.
 
 ## Authoring a plugin
 
@@ -18,7 +18,7 @@ import type {
   AgentImpl,
   SkillDescriptor,
   SkillHandler,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 
 const myAgent: AgentImpl = {
   descriptor: {
@@ -66,8 +66,8 @@ Compile to ESM with esbuild or tsc; ship `dist/index.mjs` as your daemon entry. 
 
 ## What's exported
 
-- **`@sisyphus/kernel`** — all types: `SisyphusPlugin`, `PluginManifest`, `AgentImpl`, `AgentDescriptor`, `AgentRunContext`, `AgentEvent`, `SkillDescriptor`, `SkillHandler`, `ViewDescriptor`, `CardDescriptor`, `CardInstance`, `PluginContext`, `PluginStorage`, `RegistryAPI`, `Disposable`, `ChatMessage`, plus `KernelEvents` constants and `IPCMessage` envelopes.
-- **`@sisyphus/kernel/ui`** — browser-only runtime helpers your plugin's `./ui` entry uses to register views, card renderers, and React context providers: `registerView` / `registerCardRenderer` / `registerProvider` (and their list / get / dispose siblings).
+- **`@sisylabs/kernel`** — all types: `SisyphusPlugin`, `PluginManifest`, `AgentImpl`, `AgentDescriptor`, `AgentRunContext`, `AgentEvent`, `SkillDescriptor`, `SkillHandler`, `ViewDescriptor`, `CardDescriptor`, `CardInstance`, `PluginContext`, `PluginStorage`, `RegistryAPI`, `Disposable`, `ChatMessage`, plus `KernelEvents` constants and `IPCMessage` envelopes.
+- **`@sisylabs/kernel/ui`** — browser-only runtime helpers your plugin's `./ui` entry uses to register views, card renderers, and React context providers: `registerView` / `registerCardRenderer` / `registerProvider` (and their list / get / dispose siblings).
 
 ## Plugin RPC protocol
 

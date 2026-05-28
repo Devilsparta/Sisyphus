@@ -27,7 +27,7 @@ import type {
   AgentEvent,
   AgentRunContext,
   ChatMessage,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 import { PluginBroker } from '../src/plugin-broker.js';
 import { PluginManager } from '../src/plugin-manager.js';
 import { Registry } from '../src/registry.js';
@@ -57,8 +57,8 @@ async function main(): Promise<void> {
   const pm = new PluginManager(registry, broker);
 
   console.log('[smoke] activating plugin-base + plugin-hello');
-  await pm.activate('@sisyphus/plugin-base');
-  await pm.activate('@sisyphus/plugin-hello');
+  await pm.activate('@sisylabs/plugin-base');
+  await pm.activate('@sisylabs/plugin-hello');
 
   const fanout = registry.getAgent('plugin-hello.agent.fanout-time');
   if (!fanout) throw new Error('fanout-time agent not registered');
@@ -87,7 +87,7 @@ async function main(): Promise<void> {
   };
 
   await broker.invokeAgent(
-    '@sisyphus/plugin-hello',
+    '@sisylabs/plugin-hello',
     'plugin-hello.agent.fanout-time',
     ctx,
     'go',
@@ -157,8 +157,8 @@ async function main(): Promise<void> {
   );
   assertEq('sub tool_call.skill', tc?.skill, 'plugin-base.skill.current-time');
 
-  await pm.deactivate('@sisyphus/plugin-hello');
-  await pm.deactivate('@sisyphus/plugin-base');
+  await pm.deactivate('@sisylabs/plugin-hello');
+  await pm.deactivate('@sisylabs/plugin-base');
 
   console.log('[smoke] ✓ spawnAgent fan-out smoke passed');
 }

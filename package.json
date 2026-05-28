@@ -4,7 +4,7 @@
   "private": true,
   "description": "AI-native VSCode platform (kernel + plugins). See concepts/sisyphus-plugin-architecture.md in wiki.",
   "scripts": {
-    "dev": "pnpm --filter @sisyphus/ui dev",
+    "dev": "pnpm --filter @sisylabs/ui dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r --parallel typecheck",

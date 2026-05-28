@@ -8,7 +8,7 @@
  *  - Mutations write to disk fire-and-forget; the daemon flushes on shutdown.
  */
 import { randomUUID } from 'node:crypto';
-import type { PluginStorage } from '@sisyphus/kernel';
+import type { PluginStorage } from '@sisylabs/kernel';
 
 export interface Task {
   id: string;

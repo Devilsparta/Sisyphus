@@ -12,7 +12,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type { PluginStorage } from '@sisyphus/kernel';
+import type { PluginStorage } from '@sisylabs/kernel';
 
 const ROOT = path.join(os.homedir(), '.sisyphus', 'plugins');
 

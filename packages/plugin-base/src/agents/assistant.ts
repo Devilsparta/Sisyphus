@@ -16,7 +16,7 @@
  *   This agent builds a {tool_name → skill_id} map from ctx.querySkills()
  *   each turn so dispatch finds the right handler.
  */
-import type { AgentImpl } from '@sisyphus/kernel';
+import type { AgentImpl } from '@sisylabs/kernel';
 import { randomUUID } from 'node:crypto';
 import OpenAI from 'openai';
 

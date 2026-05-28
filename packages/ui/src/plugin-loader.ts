@@ -3,7 +3,7 @@
  *
  * Both dev and prod fetch /api/plugins from the daemon and dynamic-import
  * each plugin's UI bundle (dist/ui.mjs) over HTTP. There is no static
- * `import '@sisyphus/plugin-foo/ui'` anywhere in the host UI — plugins
+ * `import '@sisylabs/plugin-foo/ui'` anywhere in the host UI — plugins
  * are completely decoupled from the host binary.
  *
  * dev workflow:
@@ -21,12 +21,12 @@
  * the rest still load.
  */
 import type { ComponentType, ReactNode } from 'react';
-import type { CardDescriptor, ViewDescriptor } from '@sisyphus/kernel';
+import type { CardDescriptor, ViewDescriptor } from '@sisylabs/kernel';
 import {
   registerView,
   registerCardRenderer,
   registerProvider,
-} from '@sisyphus/kernel/ui';
+} from '@sisylabs/kernel/ui';
 
 interface PluginUIModule {
   views?: Array<{ descriptor: ViewDescriptor; Component: ComponentType }>;

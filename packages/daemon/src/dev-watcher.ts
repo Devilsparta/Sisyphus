@@ -18,7 +18,7 @@
  * in multiple chunks.
  */
 import { watch, type FSWatcher } from 'node:fs';
-import { KernelEvents } from '@sisyphus/kernel';
+import { KernelEvents } from '@sisylabs/kernel';
 import type { Registry } from './registry';
 import type { PluginManager } from './plugin-manager';
 

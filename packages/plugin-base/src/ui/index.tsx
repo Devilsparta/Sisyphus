@@ -3,10 +3,10 @@
  *
  * The kernel UI (packages/ui) imports this module and threads the
  * registrations through its layout / chat / card systems. The daemon entry
- * (`@sisyphus/plugin-base`) stays React-free.
+ * (`@sisylabs/plugin-base`) stays React-free.
  */
 import type { ComponentType, ReactNode } from 'react';
-import type { CardDescriptor, ViewDescriptor } from '@sisyphus/kernel';
+import type { CardDescriptor, ViewDescriptor } from '@sisylabs/kernel';
 import ChatPanel from './views/chat-panel';
 import CanvasPreview from './views/canvas-preview';
 import SettingsView from './views/settings';

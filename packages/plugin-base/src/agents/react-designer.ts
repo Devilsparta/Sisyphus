@@ -5,7 +5,7 @@
  * but as a self-contained agent. The router routes here today; once a second
  * agent exists (M3+) the router will pick between them using `spawnHint`.
  */
-import type { AgentImpl, AgentRunContext } from '@sisyphus/kernel';
+import type { AgentImpl, AgentRunContext } from '@sisylabs/kernel';
 import OpenAI from 'openai';
 
 const SYSTEM_PROMPT =

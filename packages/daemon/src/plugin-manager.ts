@@ -23,7 +23,7 @@ import type {
   PluginManifest,
   SkillDescriptor,
   SkillHandler,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 import type { Registry } from './registry';
 import { ScopedRegistry } from './scoped-registry';
 import type { PluginBroker } from './plugin-broker';

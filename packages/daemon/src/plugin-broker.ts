@@ -21,7 +21,7 @@ import type {
   PluginManifest,
   SkillDescriptor,
   ViewDescriptor,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 import { resolvePluginPaths } from './plugin-loader';
 import { createPluginStorage } from './storage';
 

@@ -2,7 +2,7 @@
  * plugin-todo UI entry.
  */
 import type { ComponentType, ReactNode } from 'react';
-import type { CardDescriptor, ViewDescriptor } from '@sisyphus/kernel';
+import type { CardDescriptor, ViewDescriptor } from '@sisylabs/kernel';
 import TaskListCard from './cards/task-list-card';
 import TodoListView from './views/todo-list-view';
 import { TodoProvider } from './todo-state';

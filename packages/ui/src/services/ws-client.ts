@@ -9,7 +9,7 @@
  *
  * Frame format follows the custom IPC protocol pinned in the kernel.
  */
-import type { IPCEvent, IPCMessage } from '@sisyphus/kernel';
+import type { IPCEvent, IPCMessage } from '@sisylabs/kernel';
 
 type EventHandler<T = unknown> = (data: T) => void;
 

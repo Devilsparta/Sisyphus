@@ -22,7 +22,7 @@ import {
   type AgentEvent,
   type ChatMessage,
   type Region,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 import { Registry } from './registry';
 import { Router } from './router';
 import { createWSHub } from './ws';

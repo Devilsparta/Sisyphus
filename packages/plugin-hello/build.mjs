@@ -18,10 +18,10 @@ const args = [
   '--format=esm',
   '--target=node22',
   `--outfile=${resolve(__dirname, 'dist/index.mjs')}`,
-  // @sisyphus/kernel is a types-only dep for this plugin; the `import type`
+  // @sisylabs/kernel is a types-only dep for this plugin; the `import type`
   // declarations are erased by esbuild, but keep the external in case
   // some runtime usage gets added later.
-  '--external:@sisyphus/kernel',
+  '--external:@sisylabs/kernel',
   '--legal-comments=none',
 ];
 

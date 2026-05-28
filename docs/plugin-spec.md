@@ -69,13 +69,13 @@ Two artifacts shipped in the tarball:
 - `dist/index.mjs` — daemon entry. ESM, default export of
   `SisyphusPlugin`. Bundle your daemon dependencies (with esbuild's
   `--bundle`), except for the host-provided packages:
-    `@sisyphus/kernel`, `openai`, `hono`, `ws`
+    `@sisylabs/kernel`, `openai`, `hono`, `ws`
   (the daemon's own dep closure — the plugin can `import` them
   without bundling).
 - `dist/ui.mjs` — browser entry. ESM, exports
   `{ views, cardRenderers, providers }`. Bundle with esbuild; mark
   `react`, `react-dom`, `react-dom/client`, `react/jsx-runtime`,
-  `@sisyphus/kernel`, `@sisyphus/kernel/ui` as `external`. The host
+  `@sisylabs/kernel`, `@sisylabs/kernel/ui` as `external`. The host
   resolves React via importmap so plugin + host share one instance.
 
 A reference build script lives at
@@ -84,7 +84,7 @@ A reference build script lives at
 ## Daemon entry
 
 ```typescript
-import type { SisyphusPlugin } from '@sisyphus/kernel';
+import type { SisyphusPlugin } from '@sisylabs/kernel';
 
 const plugin: SisyphusPlugin = {
   manifest: { /* matches package.json sisyphus block */ },

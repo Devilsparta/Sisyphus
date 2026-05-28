@@ -18,7 +18,7 @@ import type {
   SkillDescriptor,
   SkillHandler,
   ViewDescriptor,
-} from '@sisyphus/kernel';
+} from '@sisylabs/kernel';
 import type { Registry } from './registry';
 
 export class ScopedRegistry implements RegistryAPI {

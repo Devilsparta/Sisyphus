@@ -1,5 +1,5 @@
 {
-  "name": "@sisyphus/plugin-hello",
+  "name": "@sisylabs/plugin-hello",
   "version": "0.1.0",
   "private": true,
   "description": "Test fixture for the M24 plugin broker — minimal echo skill + agent.",
@@ -27,7 +27,7 @@
   },
   "keywords": ["sisyphus-plugin"],
   "dependencies": {
-    "@sisyphus/kernel": "workspace:*"
+    "@sisylabs/kernel": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20",

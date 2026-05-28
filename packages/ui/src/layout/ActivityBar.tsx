@@ -6,7 +6,7 @@ import {
   Settings,
   type LucideIcon,
 } from 'lucide-react';
-import { listViews } from '@sisyphus/kernel/ui';
+import { listViews } from '@sisylabs/kernel/ui';
 import { cn } from '@/lib/utils';
 
 interface ActivityBarProps {

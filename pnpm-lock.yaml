@@ -23,7 +23,7 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.14(hono@4.12.21)
-      '@sisyphus/kernel':
+      '@sisylabs/kernel':
         specifier: workspace:*
         version: link:../kernel
       dotenv:
@@ -42,13 +42,13 @@ importers:
         specifier: ^8.20.1
         version: 8.20.1
     devDependencies:
-      '@sisyphus/plugin-base':
+      '@sisylabs/plugin-base':
         specifier: workspace:*
         version: link:../plugin-base
-      '@sisyphus/plugin-hello':
+      '@sisylabs/plugin-hello':
         specifier: workspace:*
         version: link:../plugin-hello
-      '@sisyphus/plugin-todo':
+      '@sisylabs/plugin-todo':
         specifier: workspace:*
         version: link:../plugin-todo
       '@types/node':
@@ -68,6 +68,10 @@ importers:
         version: 5.0.2
 
   packages/kernel:
+    dependencies:
+      react:
+        specifier: ^18 || ^19
+        version: 18.3.1
     devDependencies:
       '@types/react':
         specifier: ^18.3.0
@@ -81,7 +85,7 @@ importers:
       '@codesandbox/sandpack-react':
         specifier: ^2.20.0
         version: 2.20.0(react-dom@18.3.1)(react@18.3.1)
-      '@sisyphus/kernel':
+      '@sisylabs/kernel':
         specifier: workspace:*
         version: link:../kernel
       clsx:
@@ -112,7 +116,7 @@ importers:
 
   packages/plugin-hello:
     dependencies:
-      '@sisyphus/kernel':
+      '@sisylabs/kernel':
         specifier: workspace:*
         version: link:../kernel
     devDependencies:
@@ -125,7 +129,7 @@ importers:
 
   packages/plugin-todo:
     dependencies:
-      '@sisyphus/kernel':
+      '@sisylabs/kernel':
         specifier: workspace:*
         version: link:../kernel
     devDependencies:
@@ -147,7 +151,7 @@ importers:
 
   packages/ui:
     dependencies:
-      '@sisyphus/kernel':
+      '@sisylabs/kernel':
         specifier: workspace:*
         version: link:../kernel
       clsx:
