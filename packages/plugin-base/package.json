@@ -1,8 +1,21 @@
 {
   "name": "@sisylabs/plugin-base",
   "version": "0.1.0",
-  "private": true,
-  "description": "Reference plugin: react-designer agent + chat/canvas views.",
+  "description": "Reference Sisyphus plugin: react-designer + time-helper + assistant agents, plus chat / canvas / settings views.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Devilsparta/Sisyphus.git",
+    "directory": "packages/plugin-base"
+  },
+  "homepage": "https://github.com/Devilsparta/Sisyphus#readme",
+  "keywords": [
+    "sisyphus-plugin",
+    "sisyphus",
+    "ai",
+    "react-designer",
+    "assistant"
+  ],
   "type": "module",
   "main": "./src/index.ts",
   "exports": {
@@ -27,27 +40,49 @@
       "skills": []
     }
   },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build:ui": "node build-ui.mjs",
-    "build": "pnpm build:ui",
-    "dev": "node build-ui.mjs --watch"
+    "build:daemon": "node build-daemon.mjs",
+    "build": "pnpm build:daemon && pnpm build:ui",
+    "dev": "node build-ui.mjs --watch",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@codesandbox/sandpack-react": "^2.20.0",
-    "@sisylabs/kernel": "workspace:*",
-    "clsx": "^2.1.1",
-    "openai": "^6.33.0",
-    "tailwind-merge": "^3.5.0"
+    "openai": "^6.33.0"
   },
   "peerDependencies": {
-    "react": "^18"
+    "@sisylabs/kernel": "^0.1.0",
+    "react": "^18 || ^19"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@codesandbox/sandpack-react": "^2.20.0",
+    "@sisylabs/kernel": "workspace:*",
     "@types/node": "^20",
     "@types/react": "^18.3.0",
+    "clsx": "^2.1.1",
     "esbuild": "^0.28.0",
     "react": "^18.3.1",
+    "tailwind-merge": "^3.5.0",
     "typescript": "^5"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.mjs",
+    "exports": {
+      ".": "./dist/index.mjs",
+      "./ui": "./dist/ui.mjs",
+      "./package.json": "./package.json"
+    }
   }
 }

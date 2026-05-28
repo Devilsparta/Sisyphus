@@ -87,6 +87,8 @@ Config: `packages/daemon/.env.local` (OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MO
 | M24.6 | Crashed plugin state — manager disposes, WS broadcast, /api/plugins reactivate | 05-26 |
 | M24.7 | spawnAgent over RPC (cross-process fan-out) + arm64 cross-build + UI crash badge | 05-26 |
 | M25.1 | @sisylabs/kernel publish prep (dist emit + publishConfig dual-mode + README) | 05-27 |
+| M25.2 | Rename @sisyphus/* → @sisylabs/* + publish @sisylabs/kernel | 05-28 |
+| M25.3 | Publish @sisylabs/plugin-base + @sisylabs/plugin-todo (marketplace install now works) | 05-28 |
 
 ## Key files to know
 
@@ -134,7 +136,16 @@ Config path: `~/.sisyphus/plugins.config.json`
 
 ## What just happened (most recent work)
 
-**Today (2026-05-27):**
+**Today (2026-05-28):**
+- M25.3: published `@sisylabs/plugin-base@0.1.0` (1.2 MB tarball) and `@sisylabs/plugin-todo@0.1.0` (7.7 KB tarball). Both packages now visible at https://npmjs.com/package/@sisylabs/plugin-base + /plugin-todo, and discoverable via `keywords:sisyphus-plugin` registry search (M23 marketplace search picks them up automatically).
+  - New `build-daemon.mjs` per plugin: esbuild bundle `src/index.ts` → `dist/index.mjs`, externals = `@sisylabs/kernel` + `openai` (plugin-base only).
+  - Same `publishConfig` dual-mode trick as kernel: top-level `main` = `./src/index.ts` for tsx dev; published tarball gets `main` = `./dist/index.mjs` and matching `exports`.
+  - Trimmed runtime deps: plugin-base ships with one runtime dep (`openai`); plugin-todo ships with zero (UI deps like sandpack / tailwind-merge inlined into `dist/ui.mjs` at build time, not consumer-visible).
+  - `@sisylabs/kernel` moved to `peerDependencies` (^0.1.0) + `devDependencies` (workspace:*) — consumer doesn't get a duplicate kernel install, but type imports still resolve in the published tarball.
+  - In-app marketplace install button now works for the reference plugins. `marketplace.json` was already pointing at the right packageNames (M23 prep).
+- M25.2 (earlier today): @sisyphus npm scope rejected free-org creation (similarity to existing @sisyphus.js / @sisyphus-ai); created @sisylabs instead. Project name "Sisyphus" stays; only the npm scope changes. Bulk rename `@sisyphus/` → `@sisylabs/` across 59 files (sed, excluding node_modules / dist / target). 57/57 smoke assertions pass after rename. Then published `@sisylabs/kernel@0.1.0` (https://npmjs.com/package/@sisylabs/kernel).
+
+**Yesterday (2026-05-27):**
 - M25.1: `@sisylabs/kernel` ready for npm publish (scope `@sisyphus` is free; verified via `npm view`).
   - `packages/kernel/tsconfig.build.json` emits `.js` + `.d.ts` + sourcemaps to `dist/`.
   - `package.json` keeps `main = ./src/index.ts` for dev (tsx workspace resolution unchanged); a `publishConfig` block overrides `main` / `types` / `exports` to point at `./dist/...` only inside the published tarball. Verified by `pnpm pack --pack-destination /tmp` + inspecting the package.json inside the .tgz — it has dist paths, while the in-tree file still has src paths.
