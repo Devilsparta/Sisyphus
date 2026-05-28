@@ -1,0 +1,31 @@
+{
+  "name": "@sisylabs/create-plugin",
+  "version": "0.1.0",
+  "description": "Scaffolder for Sisyphus plugins. Run `npm create @sisylabs/plugin@latest my-plugin` to get a working plugin skeleton in seconds.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Devilsparta/Sisyphus.git",
+    "directory": "packages/create-plugin"
+  },
+  "homepage": "https://github.com/Devilsparta/Sisyphus#readme",
+  "keywords": [
+    "sisyphus",
+    "sisyphus-plugin",
+    "scaffolder",
+    "template",
+    "create"
+  ],
+  "type": "module",
+  "bin": {
+    "create-sisylabs-plugin": "./cli.mjs"
+  },
+  "files": [
+    "cli.mjs",
+    "template",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

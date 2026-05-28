@@ -18,6 +18,8 @@ importers:
         specifier: 1.0.0-alpha.6
         version: 1.0.0-alpha.6
 
+  packages/create-plugin: {}
+
   packages/daemon:
     dependencies:
       '@hono/node-server':

@@ -89,6 +89,7 @@ Config: `packages/daemon/.env.local` (OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MO
 | M25.1 | @sisylabs/kernel publish prep (dist emit + publishConfig dual-mode + README) | 05-27 |
 | M25.2 | Rename @sisyphus/* → @sisylabs/* + publish @sisylabs/kernel | 05-28 |
 | M25.3 | Publish @sisylabs/plugin-base + @sisylabs/plugin-todo (marketplace install now works) | 05-28 |
+| M25.4 | @sisylabs/create-plugin scaffolder + plugin author quickstart docs | 05-28 |
 
 ## Key files to know
 
@@ -137,6 +138,7 @@ Config path: `~/.sisyphus/plugins.config.json`
 ## What just happened (most recent work)
 
 **Today (2026-05-28):**
+- M25.4: published `@sisylabs/create-plugin@0.1.0` — `npm create @sisylabs/plugin@latest my-plugin` (or `pnpm create @sisylabs/plugin my-plugin`) scaffolds a complete plugin skeleton: package.json with sisyphus-plugin keyword + manifest block + publishConfig, src/index.ts with a hello agent + echo skill, build.mjs (esbuild → dist/index.mjs), tsconfig.json, .gitignore, README. Interactive prompt for npm scope / display name / description; `--yes` flag skips with defaults. Live tested: `npm create @sisylabs/plugin@latest live-test --yes` from a clean tmpdir → install → build → working dist/index.mjs (1.5 KB) in under 30s. `docs/plugin-quickstart.md` written as the canonical author guide (links from the kernel README + a wiki copy at `concepts/sisyphus-plugin-quickstart.md`).
 - M25.3: published `@sisylabs/plugin-base@0.1.0` (1.2 MB tarball) and `@sisylabs/plugin-todo@0.1.0` (7.7 KB tarball). Both packages now visible at https://npmjs.com/package/@sisylabs/plugin-base + /plugin-todo, and discoverable via `keywords:sisyphus-plugin` registry search (M23 marketplace search picks them up automatically).
   - New `build-daemon.mjs` per plugin: esbuild bundle `src/index.ts` → `dist/index.mjs`, externals = `@sisylabs/kernel` + `openai` (plugin-base only).
   - Same `publishConfig` dual-mode trick as kernel: top-level `main` = `./src/index.ts` for tsx dev; published tarball gets `main` = `./dist/index.mjs` and matching `exports`.
